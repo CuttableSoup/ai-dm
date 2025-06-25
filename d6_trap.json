@@ -1,0 +1,24 @@
+{
+    "id": "trap_spikes",
+    "name": "Spike Trap",
+    "personality": "mindless, mechanical",
+    "attitude": "hostile",
+    "attributes": {
+        "Agility": 12,
+        "Coordination": 6,
+        "Physique": 12,
+        "Presence": 0,
+        "Intellect": 0,
+        "Perception": 15
+    },
+    "skills": {
+        "Stealth": 5,
+        "Brawling": 4
+    },
+    "equipment": [{
+        "type": "Weapon",
+        "name": "Hidden Spikes",
+        "skill": "Brawling",
+        "damage": 6
+    }]
+}

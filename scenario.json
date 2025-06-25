@@ -1,22 +1,92 @@
 {
-    "scenario_name": "Forest Shrine Encounter",
+    "scenario_name": "The Forgotten Shrine",
     "environment": {
-        "description": "A mossy clearing in an ancient forest, littered with crumbling stones from a forgotten shrine. The air is tense."
+        "starting_room": "shrine_clearing",
+        "rooms": {
+            "shrine_clearing": {
+                "name": "Shrine Clearing",
+                "description": "A mossy clearing in an ancient forest, littered with crumbling stones from a forgotten shrine. A chill hangs in the air. A dark stone archway leads north into the shrine itself.",
+                "objects": [{
+                    "name": "Crumbling Stones",
+                    "description": "Piles of moss-covered stones from the collapsed shrine walls. They look heavy.",
+                    "action": {
+                        "skill": "Search",
+                        "dn": 14,
+                        "success_text": "Tucked away under a large stone, you find a small, forgotten leather pouch containing a few old coins."
+                    }
+                }],
+                "exits": [{
+                    "name": "Stone Archway",
+                    "to_room": "antechamber",
+                    "description": "A dark archway leading north."
+                }]
+            },
+            "antechamber": {
+                "name": "Antechamber",
+                "description": "You are in a damp, stone antechamber. The floor is dusty and uneven. A large, iron-bound wooden door stands to the north. The way back to the clearing is south.",
+                "objects": [{
+                    "name": "Dusty Floor",
+                    "description": "The floor is covered in a thick layer of undisturbed dust, except for what you just tracked in.",
+                    "action": {
+                        "skill": "Tracking",
+                        "dn": 12,
+                        "success_text": "You notice faint, heavy tracks leading towards the northern door. Orc tracks. You also spot subtle markings near the center of the room, suggesting a pressure plate."
+                    }
+                }],
+                "exits": [{
+                    "name": "Clearing",
+                    "to_room": "shrine_clearing",
+                    "description": "The way out to the south."
+                }, {
+                    "name": "Iron-bound Door",
+                    "to_room": "inner_sanctum",
+                    "description": "A heavy door to the north.",
+                    "action": {
+                        "skill": "Lifting",
+                        "dn": 13,
+                        "success_text": "With a great heave, you shove the heavy door open."
+                    }
+                }]
+            },
+            "inner_sanctum": {
+                "name": "Inner Sanctum",
+                "description": "This circular chamber houses a large, ominous-looking altar in the center. The air is thick with a sense of dread. The only exit is the heavy door to the south.",
+                "objects": [{
+                    "name": "Ominous Altar",
+                    "description": "A large stone altar stained with old, dark patches. It feels cold to the touch.",
+                    "action": {
+                        "skill": "Investigation",
+                        "dn": 15,
+                        "success_text": "You discover hidden compartments on the altar, but they are all empty."
+                    }
+                }],
+                "exits": [{
+                    "name": "Antechamber",
+                    "to_room": "antechamber",
+                    "description": "The way out to the south."
+                }]
+            }
+        }
     },
     "characters": {
-        "players": [
-        "d6_warrior.json"
-        ],
-        "enemies": [
-        "d6_orc_berserker.json"
-        ]
+        "players": [{
+            "sheet": "d6_warrior.json",
+            "starting_room": "shrine_clearing"
+        }],
+        "enemies": [{
+            "sheet": "d6_orc_berserker.json",
+            "starting_room": "inner_sanctum"
+        }, {
+            "sheet": "d6_trap.json",
+            "starting_room": "antechamber"
+        }]
     },
     "prompts": {
         "action_selection": {
-        "combat": "You are in combat. Your character's status is: {actor_description}. Other characters in the fight: {other_chars}. Your command is: '{command}'. Based on your character's traits, choose the best function to execute this command.",
-        "non_combat": "You are in an interactive scene. Your character's status is: {actor_description}. Other characters present: {other_chars}. Your intention is: '{command}'. Based on your character's traits, choose the best function to accomplish this."
+            "combat": "You are in combat in the {room_name}. Description: {room_description}\nYour status: {actor_description}.\nVisible Characters: {other_chars}.\nExits: {exits}.\nYour command is: '{command}'. Based on your character's traits, choose the best function to execute this command.",
+            "non_combat": "You are in the {room_name}. Description: {room_description}\nYour status: {actor_description}.\nVisible Characters: {other_chars}.\nObjects: {objects}.\nExits: {exits}.\nYour intention is: '{command}'.\n\n**Instruction**: You MUST select a function from the available tools. Do not invent new function names. For any action that involves using a character skill (like searching, lifting, persuading, tracking, etc.), you MUST use the 'execute_skill_check' function. Choose the best function to execute the command."
         },
         "npc_dialogue": "You are roleplaying as an NPC. Your character's status: {actor_description}.\nThe last thing that happened was: {context}\nBased on your personality, traits, and the situation, write a single, compelling line of dialogue for your character to say now. Do not surround your response with quotes.",
-        "narrative_summary": "You are a Game Master. Scene: {environment_description}\nCharacter Statuses:\n{statuses}\nLatest Action Results:\n---\n{mechanical_summary}\n---\nNarrate what just happened in a compelling, 2-4 sentence paragraph. Do not repeat mechanical results like dice rolls or numbers."
+        "narrative_summary": "You are a Game Master narrating a story.\n\n**Context:**\n- The character who just acted is: {actor_name}.\n- The current location is the {room_name}: {room_description}.\n- Other entities in this room are:\n{statuses}\n- The specific mechanical outcome of the action was:\n---\n{mechanical_summary}\n---\n\n**Your Task:**\nWrite a 2-3 sentence narrative description of what just happened.\n\n**Strict Rules:**\n1. The narration must be from the perspective of {actor_name} or describe {actor_name}'s actions.\n2. ONLY describe things that could be perceived from within the {room_name}. Do NOT invent details about other rooms.\n3. Do NOT assign actions to inanimate objects like traps. The actor is {actor_name}.\n4. When describing a skill use (like Search, Lift, etc.), narrate the character's physical actions and what they discovered as a result. Do not personify the skill (e.g., instead of 'your Search skill reveals', say 'searching the area, you find...')."
     }
 }
