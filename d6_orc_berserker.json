@@ -1,0 +1,24 @@
+{
+    "id": "enemy_orc",
+    "name": "Orc Berserker",
+    "personality": "angry, greedy, aggressive",
+    "attitude": "hostile",
+    "attributes": {
+        "Agility": 9,
+        "Coordination": 9,
+        "Physique": 9,
+        "Presence": 9,
+        "Intellect": 9,
+        "Perception": 9
+    },
+    "skills": {
+        "Brawling": 3,
+        "Dodge": 3
+    },
+    "equipment": [{
+        "type": "Weapon",
+        "name": "Fists",
+        "skill": "Brawling",
+        "damage": 0
+    }]
+}

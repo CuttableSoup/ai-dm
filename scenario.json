@@ -1,0 +1,22 @@
+{
+    "scenario_name": "Forest Shrine Encounter",
+    "environment": {
+        "description": "A mossy clearing in an ancient forest, littered with crumbling stones from a forgotten shrine. The air is tense."
+    },
+    "characters": {
+        "players": [
+        "d6_warrior.json"
+        ],
+        "enemies": [
+        "d6_orc_berserker.json"
+        ]
+    },
+    "prompts": {
+        "action_selection": {
+        "combat": "You are in combat. Your character's status is: {actor_description}. Other characters in the fight: {other_chars}. Your command is: '{command}'. Based on your character's traits, choose the best function to execute this command.",
+        "non_combat": "You are in an interactive scene. Your character's status is: {actor_description}. Other characters present: {other_chars}. Your intention is: '{command}'. Based on your character's traits, choose the best function to accomplish this."
+        },
+        "npc_dialogue": "You are roleplaying as an NPC. Your character's status: {actor_description}.\nThe last thing that happened was: {context}\nBased on your personality, traits, and the situation, write a single, compelling line of dialogue for your character to say now. Do not surround your response with quotes.",
+        "narrative_summary": "You are a Game Master. Scene: {environment_description}\nCharacter Statuses:\n{statuses}\nLatest Action Results:\n---\n{mechanical_summary}\n---\nNarrate what just happened in a compelling, 2-4 sentence paragraph. Do not repeat mechanical results like dice rolls or numbers."
+    }
+}
