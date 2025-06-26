@@ -1,6 +1,8 @@
 {
-    "id": "enemy_orc",
-    "name": "Orc Berserker",
+    "id": "npc",
+    "name": "Grog",
+    "race": "orc",
+    "gender": "male",
     "personality": "angry, greedy, aggressive",
     "attitude": "hostile",
     "attributes": {

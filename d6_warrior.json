@@ -1,6 +1,10 @@
 {
-    "id": "player_valerius",
+    "id": "player",
     "name": "Valerius",
+    "race": "human",
+    "gender": "male",
+    "personality": "none",
+    "attitude": "indifferent",
     "attributes": {
         "Agility": 9,
         "Coordination": 9,

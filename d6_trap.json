@@ -1,8 +1,10 @@
 {
-    "id": "trap_spikes",
+    "id": "trap",
     "name": "Spike Trap",
-    "personality": "mindless, mechanical",
-    "attitude": "hostile",
+    "race": "none",
+    "gender": "none",
+    "personality": "mindless",
+    "attitude": "none",
     "attributes": {
         "Agility": 12,
         "Coordination": 6,
