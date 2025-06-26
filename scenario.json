@@ -108,7 +108,7 @@
             "sheet": "d6_warrior.json",
             "location": "shrine_clearing"
         }],
-        "enemies": [{
+        "npcs": [{
             "sheet": "d6_orc.json",
             "location": "inner_sanctum"
         }, {
