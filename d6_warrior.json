@@ -1,10 +1,26 @@
 {
     "id": "player",
     "name": "Valerius",
-    "race": "human",
-    "gender": "male",
-    "personality": "none",
-    "attitude": "indifferent",
+    "wounds": 7,
+    "qualities": {
+        "race": "human",
+        "gender": "male",
+        "eyes": "brown",
+        "hair": "brown",
+        "body": "lightly scarred",
+        "skin": "tan",
+        "height": 72,
+        "weight": 180,
+        "religion": "none"
+    },
+    "languages": ["common", "elven", "dwarven"],
+    "personality": ["none"],
+    "statuses": ["none"],
+    "attitudes": [
+        {
+            "default": "indifferent"
+        }
+    ],
     "attributes": {
         "Agility": 9,
         "Coordination": 9,
@@ -15,12 +31,142 @@
     },
     "skills": {
         "Melee_Combat": 3,
-        "Dodge": 3
+        "Firearms": 3,
+        "Dodge": 3,
+        "Search": 3,
+        "spellcating": 3
     },
-    "equipment": [{
-        "type": "Weapon",
-        "name": "Longsword",
-        "skill": "Melee_Combat",
-        "damage": 3
-    }]
+    "equipment": [
+        {
+            "type": "Weapon",
+            "name": "Longsword",
+            "skill": "Melee_Combat",
+            "range": "melee",
+            "effect": ["physical","single"],
+            "location": "hand",
+            "quality": "good",
+            "value": 3,
+            "description": "gleaming steel"
+        },
+        {
+            "type": "armor",
+            "name": "Chainmail",
+            "skill": "none",
+            "range": "none",
+            "effect": ["physical","single"],
+            "location": "chest",
+            "quality": "good",
+            "value": 3,
+            "description": "oiled chain"
+        },
+        {
+            "type": "armor",
+            "name": "Steel Shield",
+            "skill": "none",
+            "range": "none",
+            "effect": ["physical","single"],
+            "location": "hand",
+            "quality": "good",
+            "value": 3,
+            "description": "battered shield"
+        },
+        {
+            "type": "wonderous",
+            "name": "Headband of Intellect",
+            "skill": "none",
+            "range": "melee",
+            "effect": ["intellect","single"],
+            "location": "head",
+            "quality": "good",
+            "value": 3,
+            "description": "golden plain band"
+        }
+    ],
+    "gear": [
+        {
+            "type": "Weapon",
+            "name": "Gun",
+            "skill": "Firearms",
+            "range": "short",
+            "effect": ["physical","single"],
+            "location": "hand",
+            "quality": "good",
+            "magazine": "6/6",
+            "value": 4,
+            "description": "revolver"
+        },
+        {
+            "type": "consumable",
+            "name": "Potion of Healing",
+            "skill": "none",
+            "range": "melee",
+            "effect": ["heal","single"],
+            "location": "hand",
+            "quality": "good",
+            "value": 3,
+            "description": "glass bottle of luminous blue fluid"
+        },
+        {
+            "type": "ammunition",
+            "name": "bullets",
+            "skill": "none",
+            "range": "none",
+            "effect": "none",
+            "location": "hand",
+            "quality": "good",
+            "value": 6,
+            "description": "revolver ammunition"
+        }
+    ],
+    "spells": [
+        {
+            "name": "Hold Person",
+            "value": 0,
+            "effect": ["stun", "single"],
+            "duration": 3,
+            "increment": "second",
+            "range": "medium",
+            "skill": "spellcasting",
+            "location": ["hand","mouth"],
+            "difficulty": 10,
+            "description": "restrains one target"
+        },
+        {
+            "name": "Fireball",
+            "value": 12,
+            "effect": ["fire","area(short)"],
+            "duration": 0,
+            "increment": "instant",
+            "range": "long",
+            "skill": "spellcasting",
+            "location": ["hand","mouth"],
+            "difficulty": 10,
+            "description": "burst of fire"
+        },
+        {
+            "name": "Charm",
+            "value": 0,
+            "effect": ["charm","single"],
+            "duration": 9,
+            "increment": "minute",
+            "range": "medium",
+            "skill": "spellcasting",
+            "location": ["hand","mouth"],
+            "difficulty": 10,
+            "description": "charms one target"
+        },
+        {
+            "name": "Comprehend Languages",
+            "value": 0,
+            "effect": ["language","single"],
+            "duration": 9,
+            "increment": "minute",
+            "range": "melee",
+            "skill": "spellcasting",
+            "location": ["hand","mouth"],
+            "difficulty": 10,
+            "description": "adds a language of choice"
+        }
+    ],
+    "experience": 50
 }

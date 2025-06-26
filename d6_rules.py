@@ -30,7 +30,7 @@ D6_SKILLS_BY_ATTRIBUTE = {
         "Climb_Jump", "Lifting", "Running", "Stamina", "Swim"
     ],
     "Agility": [
-        "Acrobatics", "Brawling", "Dodge", "Flying_0G", "Melee_Combat", "Riding", "Stealth"
+        "Acrobatics", "Brawling", "Dodge", "Flying", "Melee_Combat", "Riding", "Hide"
     ],
     "Coordination": [
         "Firearms", "Gunnery", "Lockpicking", "Missile_Weapons", "Piloting", "Sleight_of_Hand", "Throwing", "Vehicle_Operation"
@@ -40,7 +40,7 @@ D6_SKILLS_BY_ATTRIBUTE = {
         "Medicine", "Navigation", "Scholar", "Security", "Tactics", "Technology"
     ],
     "Perception": [
-        "Artist", "Forgery", "Gambling", "Hide", "Investigation", "Know_How", "Repair_Crafting", "Search", "Streetwise", "Survival", "Tracking"
+        "Artist", "Forgery", "Gambling", "Investigation", "Know_How", "Repair_Crafting", "Search", "Streetwise", "Survival", "Tracking"
     ],
     "Presence": [
         "Animal_Handling", "Charm", "Command", "Con", "Disguise", "Intimidation", "Persuasion", "Willpower"
@@ -48,12 +48,10 @@ D6_SKILLS_BY_ATTRIBUTE = {
 }
 
 # This dictionary defines which skills can be used to oppose another skill check.
-# For example, a 'Stealth' attempt can be opposed by a 'Search' or 'Tracking' roll.
 OPPOSED_SKILLS = {
     # --- Agility Skills ---
     "Brawling": ["Brawling", "Dodge"],
     "Melee_Combat": ["Melee_Combat", "Dodge"],
-    "Stealth": ["Search", "Tracking"],
     # --- Coordination Skills ---
     "Firearms": ["Dodge"],
     "Gunnery": ["Dodge"],
@@ -64,7 +62,7 @@ OPPOSED_SKILLS = {
     "Security": ["Security", "Technology"],
     # --- Perception Skills ---
     "Forgery": ["Forgery", "Investigation"],
-    "Hide": ["Search", "Investigation"],
+    "Hide": ["Search", "Investigation", "Tracking"],
     # --- Presence Skills ---
     "Charm": ["Willpower"],
     "Con": ["Willpower", "Investigation", "Streetwise"],
@@ -74,12 +72,48 @@ OPPOSED_SKILLS = {
 
 # Provides descriptive words for different levels of an attribute score.
 ATTRIBUTE_DESCRIPTORS = {
-    "Physique": {1: "Frail", 2: "Weak", 3: "Standard", 4: "Strong", 5: "Herculean"},
-    "Agility": {1: "Clumsy", 2: "Awkward", 3: "Ordinary", 4: "Agile", 5: "Nimble"},
-    "Coordination": {1: "Uncoordinated", 2: "Clumsy", 3: "Typical", 4: "Coordinated", 5: "Precise"},
-    "Intellect": {1: "Stupid", 2: "Unintelligent", 3: "Normal", 4: "Intelligent", 5: "Genius"},
-    "Perception": {1: "Oblivious", 2: "Unobservant", 3: "Fair", 4: "Perceptive", 5: "Insightful"},
-    "Presence": {1: "Uncharismatic", 2: "Shy", 3: "Unremarkable", 4: "Charismatic", 5: "Commanding"}
+    "Physique": {
+            1: "Frail",
+            2: "Weak",
+            3: "Standard",
+            4: "Strong",
+            5: "Herculean"
+        },
+    "Agility": {
+            1: "Clumsy",
+            2: "Awkward",
+            3: "Ordinary",
+            4: "Agile",
+            5: "Nimble"
+        },
+    "Coordination": {
+            1: "Uncoordinated",
+            2: "Clumsy",
+            3: "Typical",
+            4: "Coordinated",
+            5: "Precise"
+        },
+    "Intellect": {
+            1: "Stupid",
+            2: "Unintelligent",
+            3: "Normal",
+            4: "Intelligent",
+            5: "Genius"
+        },
+    "Perception": {
+            1: "Oblivious",
+            2: "Unobservant",
+            3: "Fair",
+            4: "Perceptive",
+            5: "Insightful"
+        },
+    "Presence": {
+            1: "Uncharismatic",
+            2: "Shy",
+            3: "Unremarkable",
+            4: "Charismatic",
+            5: "Commanding"
+        }
 }
 
 def get_attribute_descriptor(attribute_name, pips):

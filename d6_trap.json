@@ -1,26 +1,37 @@
 {
     "id": "trap",
     "name": "Spike Trap",
-    "race": "none",
-    "gender": "none",
-    "personality": "mindless",
-    "attitude": "none",
+    "wounds": 7,
+    "attitudes": [
+        {
+            "default": "hostile"
+        }
+    ],
+    "statuses": ["mindless","mechanical","static","fragile"],
+    "allies": "Grog",
     "attributes": {
-        "Agility": 12,
-        "Coordination": 6,
-        "Physique": 12,
+        "Agility": 0,
+        "Coordination": 0,
+        "Physique": 0,
         "Presence": 0,
         "Intellect": 0,
-        "Perception": 15
+        "Perception": 0
     },
     "skills": {
-        "Stealth": 5,
-        "Brawling": 4
+        "Hide": 9,
+        "Brawling": 9
     },
-    "equipment": [{
-        "type": "Weapon",
-        "name": "Hidden Spikes",
-        "skill": "Brawling",
-        "damage": 6
-    }]
+    "equipment": [
+        {
+            "type": "Weapon",
+            "name": "Spikes",
+            "skill": "Brawling",
+            "range": "melee",
+            "effect": "physical,single",
+            "location": "hand",
+            "quality": "poor",
+            "value": 3,
+            "description": "rusty"
+        }
+    ]
 }

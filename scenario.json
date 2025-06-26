@@ -4,49 +4,71 @@
         "starting_room": "shrine_clearing",
         "rooms": {
             "shrine_clearing": {
-                "name": "Shrine Clearing",
-                "description": "A mossy clearing in an ancient forest, littered with crumbling stones from a forgotten shrine. A chill hangs in the air. A dark stone archway leads north into the shrine itself.",
-                "objects": [{
-                    "name": "Crumbling Stones",
-                    "description": "Piles of moss-covered stones from the collapsed shrine walls. They look heavy.",
-                    "action": {
-                        "skill": "Search",
-                        "dn": 14,
-                        "success_text": "Tucked away under a large stone, you find a small, forgotten leather pouch containing a few old coins."
+                    "name": "Shrine Clearing",
+                    "description": "A mossy clearing in an ancient forest, littered with crumbling stones from a forgotten shrine. A chill hangs in the air. A dark stone archway leads north into the shrine itself.",
+                    "objects": [
+                        {
+                            "name": "Crumbling Stones",
+                            "description": "Piles of moss-covered stones from the collapsed shrine walls. They look heavy.",
+                            "action": {
+                                "skill": "Search",
+                                "difficulty": 14,
+                                "success_text": "Tucked away under a large stone, you find a small, forgotten leather pouch containing a few old coins.",
+                                "gear": [
+                                    {
+                                        "type": "treasure",
+                                        "name": "Gold coins",
+                                        "skill": "none",
+                                        "range": "none",
+                                        "effect": "none",
+                                        "location": "none",
+                                        "quality": "good",
+                                        "value": 10,
+                                        "description": "currency in a small leather pouch"
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                "exits": [
+                    {
+                        "name": "Stone Archway",
+                        "to_room": "antechamber",
+                        "description": "A dark archway leading north."
                     }
-                }],
-                "exits": [{
-                    "name": "Stone Archway",
-                    "to_room": "antechamber",
-                    "description": "A dark archway leading north."
-                }]
+                ]
             },
             "antechamber": {
                 "name": "Antechamber",
                 "description": "You are in a damp, stone antechamber. The floor is dusty and uneven. A large, iron-bound wooden door stands to the north. The way back to the clearing is south.",
-                "objects": [{
-                    "name": "Dusty Floor",
-                    "description": "The floor is covered in a thick layer of undisturbed dust, except for what you just tracked in.",
-                    "action": {
-                        "skill": "Tracking",
-                        "dn": 12,
-                        "success_text": "You notice faint, heavy tracks leading towards the northern door. Orc tracks. You also spot subtle markings near the center of the room, suggesting a pressure plate."
+                "objects": [
+                    {
+                        "name": "Dusty Floor",
+                        "description": "The floor is covered in a thick layer of undisturbed dust, except for what you just tracked in.",
+                        "action": {
+                            "skill": "Tracking",
+                            "difficulty": 12,
+                            "success_text": "You notice faint, heavy tracks leading towards the northern door. Orc tracks. You also spot subtle markings near the center of the room, suggesting a pressure plate."
+                        }
                     }
-                }],
-                "exits": [{
-                    "name": "Clearing",
-                    "to_room": "shrine_clearing",
-                    "description": "The way out to the south."
-                }, {
-                    "name": "Iron-bound Door",
-                    "to_room": "inner_sanctum",
-                    "description": "A heavy door to the north.",
-                    "action": {
-                        "skill": "Lifting",
-                        "dn": 13,
-                        "success_text": "With a great heave, you shove the heavy door open."
+                ],
+                "exits": [
+                    {
+                        "name": "Clearing",
+                        "to_room": "shrine_clearing",
+                        "description": "The way out to the south."
+                    },
+                    {
+                        "name": "Iron-bound Door",
+                        "to_room": "inner_sanctum",
+                        "description": "A heavy door to the north.",
+                        "action": {
+                            "skill": "Lifting",
+                            "difficulty": 8,
+                            "success_text": "With a great heave, you shove the heavy door open."
+                        }
                     }
-                }]
+                ]
             },
             "inner_sanctum": {
                 "name": "Inner Sanctum",
@@ -56,8 +78,21 @@
                     "description": "A large stone altar stained with old, dark patches. It feels cold to the touch.",
                     "action": {
                         "skill": "Investigation",
-                        "dn": 15,
-                        "success_text": "You discover hidden compartments on the altar, but they are all empty."
+                        "difficulty": 15,
+                        "success_text": "You discover hidden compartments on the altar containing a potion.",
+                        "gear": [
+                            {
+                                "type": "consumable",
+                                "name": "Potion of Healing",
+                                "skill": "none",
+                                "range": "melee",
+                                "effect": ["heal","single"],
+                                "location": "hand",
+                                "quality": "good",
+                                "value": 3,
+                                "description": "glass bottle of luminous blue fluid"
+                            }
+                        ]
                     }
                 }],
                 "exits": [{
@@ -71,14 +106,14 @@
     "characters": {
         "players": [{
             "sheet": "d6_warrior.json",
-            "starting_room": "shrine_clearing"
+            "location": "shrine_clearing"
         }],
         "enemies": [{
             "sheet": "d6_orc.json",
-            "starting_room": "inner_sanctum"
+            "location": "inner_sanctum"
         }, {
             "sheet": "d6_trap.json",
-            "starting_room": "antechamber"
+            "location": "antechamber"
         }]
     },
     "prompts": {

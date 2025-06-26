@@ -11,7 +11,7 @@ from d6_rules import *
 # You can change the API key, model names, and file paths here.
 ACTION_MODEL = "local-model/gemma-3-1b"  # Model used for deciding character actions
 NARRATIVE_MODEL = "local-model/gemma-3-1b" # Model used for generating descriptive text
-OPENROUTER_API_URL = "http://localhost:1234/v1/chat/completions" # Local server URL
+API_URL = "http://localhost:1234/v1/chat/completions" # Server URL
 SCENARIO_FILE = "scenario.json"      # The file containing the game's story and setup
 DEBUG = True                         # Set to True to print extra debugging information
 
@@ -56,7 +56,7 @@ class Environment:
         return self.rooms.get(room_key)
 
 class GameEntity:
-    """Represents a character (player or NPC) in the game."""
+    """Represents a character (player, NPC, object, etc) in the game."""
     def __init__(self, character_sheet_data, starting_room):
         # Basic information
         self.source_data = character_sheet_data

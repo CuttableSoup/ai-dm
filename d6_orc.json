@@ -1,26 +1,81 @@
 {
     "id": "npc",
     "name": "Grog",
-    "race": "orc",
-    "gender": "male",
-    "personality": "angry, greedy, aggressive",
-    "attitude": "hostile",
+    "wounds": 6,
+    "qualities": {
+        "race": "orc",
+        "gender": "male",
+        "eyes": "black, missing one",
+        "hair": "none",
+        "body": "scarred",
+        "skin": "green",
+        "height": 108,
+        "weight": 300,
+        "religion": "none",
+        "movitations": "greed"
+    },
+    "languages": ["orc"],
+    "personality": ["selfish","gullible"],
+    "statuses": ["none"],
+    "attitudes": [
+        {
+            "default": "indifferent"
+        }
+    ],
+    "allies": "none",
     "attributes": {
-        "Agility": 9,
-        "Coordination": 9,
-        "Physique": 9,
-        "Presence": 9,
-        "Intellect": 9,
-        "Perception": 9
+        "Agility": 2,
+        "Coordination": 2,
+        "Physique": 12,
+        "Presence": 3,
+        "Intellect": 6,
+        "Perception": 3
     },
     "skills": {
-        "Brawling": 3,
-        "Dodge": 3
+        "Brawling": 6,
+        "Dodge": 0
     },
-    "equipment": [{
-        "type": "Weapon",
-        "name": "Fists",
-        "skill": "Brawling",
-        "damage": 0
-    }]
+    "equipment": [
+        {
+            "type": "Weapon",
+            "name": "Fists",
+            "skill": "Brawling",
+            "range": "melee",
+            "effect": ["physical","single"],
+            "location": "hand",
+            "quality": "good",
+            "value": 3,
+            "description": "calloused knuckles"
+        },
+        {
+            "type": "armor",
+            "name": "hide",
+            "skill": "none",
+            "range": "none",
+            "effect": ["physical","single"],
+            "location": "chest",
+            "quality": "poor",
+            "value": 3,
+            "description": "tanned leather"
+        }
+    ],
+    "gear": [
+        {
+            "type": "treasure",
+            "name": "Gold coins",
+            "skill": "none",
+            "range": "none",
+            "effect": "none",
+            "location": "none",
+            "quality": "good",
+            "value": 20,
+            "description": "currency in a small cloth pouch"
+        }
+    ],
+    "memories": [
+        {
+            "subject": "Valerius",
+            "content": "fellow warrior met on the battlefield, took Grog's eye in combat"
+        }
+    ]
 }
