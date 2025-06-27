@@ -59,7 +59,7 @@
             "description": "tanned leather"
         }
     ],
-    "gear": [
+    "inventory": [
         {
             "type": "treasure",
             "name": "Gold coins",
@@ -69,7 +69,7 @@
             "location": "none",
             "quality": "good",
             "value": 20,
-            "description": "currency in a small cloth pouch"
+            "description": "currency"
         }
     ],
     "memories": [

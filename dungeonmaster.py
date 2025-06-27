@@ -8,18 +8,18 @@ from d6_rules import *
 
 # --- Configuration ---
 # These settings control the connection to the AI models and game files.
-# You can change the API key, model names, and file paths here.
+# You can change the model names and file paths here.
 ACTION_MODEL = "local-model/gemma-3-1b"  # Model used for deciding character actions
 NARRATIVE_MODEL = "local-model/gemma-3-1b" # Model used for generating descriptive text
-API_URL = "http://localhost:1234/v1/chat/completions" # Server URL
+LLM_API_URL = "http://localhost:1234/v1/chat/completions" # Local server URL
 SCENARIO_FILE = "scenario.json"      # The file containing the game's story and setup
-DEBUG = True                         # Set to True to print extra debugging information
+DEBUG = False                         # Set to True to print extra debugging information
 
 # --- Global State Variables ---
 # These variables store the game's data and are accessed throughout the program.
 scenario_data = {}  # Holds all the data from the scenario.json file
 game_state = {
-    "players": [], "enemies": [], "environment": None,
+    "players": [], "npcs": [], "environment": None,
     "turn_order": [], "current_turn_entity_index": 0, "round_number": 1
 }
 
@@ -49,7 +49,7 @@ class Environment:
     """Manages the game world's rooms, objects, and exits."""
     def __init__(self, environment_data):
         self.rooms = environment_data.get("rooms", {})
-        self.starting_room = environment_data.get("starting_room", "")
+        self.location = environment_data.get("location", "")
 
     def get_room(self, room_key):
         """Returns the data for a specific room."""
@@ -57,25 +57,53 @@ class Environment:
 
 class GameEntity:
     """Represents a character (player, NPC, object, etc) in the game."""
-    def __init__(self, character_sheet_data, starting_room):
+    def __init__(self, character_sheet_data, location):
         # Basic information
         self.source_data = character_sheet_data
-        self.id = character_sheet_data["id"]
-        self.name = character_sheet_data["name"]
+        self.id = character_sheet_data.get("id")
+        self.name = character_sheet_data.get("name")
         
+        # Descriptive information
+        self.qualities = character_sheet_data.get("qualities", {})
+        self.languages = character_sheet_data.get("languages", [])
+        self.memories = character_sheet_data.get("memories", [])
+        self.statuses = character_sheet_data.get("statuses", [])
+
         # Personality and attitude
-        self.personality = character_sheet_data.get("personality", "neutral")
-        self.attitude = character_sheet_data.get("attitude", ATTITUDE_INDIFFERENT)
+        personality_data = character_sheet_data.get("personality", "neutral")
+        if isinstance(personality_data, list) and personality_data:
+            self.personality = personality_data[0]
+        else:
+            self.personality = personality_data
+
+        attitude_data = character_sheet_data.get("attitudes", [])
+        default_attitude = ATTITUDE_INDIFFERENT
+        if isinstance(attitude_data, list) and attitude_data:
+            default_attitude_entry = next((att for att in attitude_data if "default" in att), None)
+            if default_attitude_entry:
+                default_attitude = default_attitude_entry.get("default", ATTITUDE_INDIFFERENT)
+        self.attitude = default_attitude
+        
+        # Game mechanics data
+        self.experience = character_sheet_data.get("experience", 0)
+        self.allies = character_sheet_data.get("allies", "none")
         
         # Attributes, skills, and equipment
         self.attributes = {k.lower(): v for k, v in character_sheet_data.get("attributes", {}).items()}
         self.skills = {k.lower(): v for k, v in character_sheet_data.get("skills", {}).items()}
+        
+        # Load equipment and inventory as separate lists
         self.equipment = character_sheet_data.get("equipment", [])
+        self.inventory = character_sheet_data.get("inventory", [])
+
+        # Spells
+        self.spells = character_sheet_data.get("spells", [])
         
         # Combat-related stats
+        self.max_wounds = character_sheet_data.get("wounds", 7)
         self.current_wound_index = WOUND_LEVEL_HEALTHY
         self.initiative_roll = 0
-        self.current_room = starting_room
+        self.current_room = location
 
     def get_attribute_descriptors_string(self):
         """
@@ -184,29 +212,58 @@ class GameEntity:
 # These functions define the specific actions characters can take in the game.
 def execute_look(actor_name, **kwargs):
     """Provides a detailed description of the character's current surroundings."""
-    actor = next((e for e in game_state["players"] + game_state["enemies"] if e.name.lower() == actor_name.lower()), None)
+    actor = next((e for e in game_state["players"] + game_state["npcs"] if e.name.lower() == actor_name.lower()), None)
     if not actor: return "Could not find actor to 'look' for."
 
     room = game_state["environment"].get_room(actor.current_room)
     if not room: return f"{actor.name} is in an unknown location."
 
     # Find other characters, objects, and exits in the room
-    visible_chars = [e.name for e in game_state["players"] + game_state["enemies"] if e.current_room == actor.current_room and e.id != actor.id]
-    objects = [f"{obj['name']}: {obj['description']}" for obj in room.get("objects", [])]
+    visible_chars = [e.name for e in game_state["players"] + game_state["npcs"] if e.current_room == actor.current_room and e.id != actor.id]
+    objects_in_room = room.get("objects", [])
+    
+    # Build the description of objects, including any items they might contain
+    object_descriptions = []
+    for obj in objects_in_room:
+        desc = f"{obj['name']}: {obj['description']}"
+        if obj.get('items'):
+            item_names = ", ".join([item['name'] for item in obj['items']])
+            desc += f" You see the following items here: {item_names}."
+        object_descriptions.append(desc)
+
     exits = [f"{exit['name']}: {exit['description']}" for exit in room.get("exits", [])]
 
     # Build the description string
     response = f"--- {room.get('name', 'Unnamed Room')} ---\n"
     response += room.get('description', 'No description available.') + "\n"
     if visible_chars: response += "\nVisible Characters: " + ", ".join(visible_chars) + "\n"
-    if objects: response += "\nObjects: \n- " + "\n- ".join(objects) + "\n"
+    if object_descriptions: response += "\nObjects: \n- " + "\n- ".join(object_descriptions) + "\n"
     if exits: response += "\nExits: \n- " + "\n- ".join(exits) + "\n"
     
     return response
 
+def execute_check_self(actor_name, **kwargs):
+    """Provides a summary of the character's own status, equipment, and inventory."""
+    actor = next((e for e in game_state["players"] if e.name.lower() == actor_name.lower()), None)
+    if not actor: return f"Could not find player '{actor_name}'."
+    
+    response = f"--- Status for {actor.name} ---\n"
+    response += f"Condition: {actor.get_wound_status()}\n"
+    response += f"Attributes: {actor.get_attribute_descriptors_string()}\n"
+    
+    # List equipped items
+    equipped_items = [f"{item['name']}" for item in actor.equipment]
+    response += "Equipped: " + (", ".join(equipped_items) if equipped_items else "Nothing") + "\n"
+    
+    # List inventory items
+    inventory_items = [f"{item['name']}" for item in actor.inventory]
+    response += "Inventory: " + (", ".join(inventory_items) if inventory_items else "Empty") + "\n"
+
+    return response
+
 def execute_move(actor_name, exit_name):
     """Moves the character through a specified exit to another room."""
-    actor = next((e for e in game_state["players"] + game_state["enemies"] if e.name.lower() == actor_name.lower()), None)
+    actor = next((e for e in game_state["players"] + game_state["npcs"] if e.name.lower() == actor_name.lower()), None)
     if not actor: return f"Action failed: Could not find actor '{actor_name}'."
 
     room = game_state["environment"].get_room(actor.current_room)
@@ -229,7 +286,7 @@ def execute_move(actor_name, exit_name):
 
 def execute_melee_attack(actor_name, target_name):
     """Executes a close-quarters physical attack with a melee weapon or unarmed strike."""
-    all_entities = game_state["players"] + game_state["enemies"]
+    all_entities = game_state["players"] + game_state["npcs"]
     actor = next((e for e in all_entities if e.name.lower() == actor_name.lower()), None)
     target_entity = next((e for e in all_entities if e.name.lower() == target_name.lower()), None)
     
@@ -269,7 +326,7 @@ def execute_melee_attack(actor_name, target_name):
 
 def execute_skill_check(actor_name, skill_name=None, target_name=None, object_name=None):
     """Performs a general skill check against a target, an object, or a static difficulty."""
-    all_entities = game_state["players"] + game_state["enemies"]
+    all_entities = game_state["players"] + game_state["npcs"]
     actor = next((e for e in all_entities if e.name.lower() == actor_name.lower()), None)
     if not actor: return f"Action failed: Could not find actor '{actor_name}'."
     
@@ -286,7 +343,7 @@ def execute_skill_check(actor_name, skill_name=None, target_name=None, object_na
         
         action_data = target_interactive.get("action")
         if not action_data:
-            return f"'{object_name}' is not interactive."
+            return f"'{object_name}' is not interactive in that way."
 
         if not skill_name:
             skill_name = action_data.get("skill")
@@ -297,15 +354,22 @@ def execute_skill_check(actor_name, skill_name=None, target_name=None, object_na
             return f"You can't use '{skill_name}' on '{object_name}'. The required skill is '{action_data.get('skill')}'."
             
         # Perform the skill check
-        difficulty_number = action_data.get("dn", 10)
+        difficulty_number = action_data.get("difficulty", 10) # Corrected from "dn"
         skill_pips = actor.get_attribute_or_skill_pips(skill_name)
         success_level, _, details_str = roll_d6_check(actor, skill_pips, difficulty_number)
         
-        outcome_summary = f"{actor.name} uses their {skill_name} skill on {object_name}: {details_str}"
+        outcome_summary = f"{actor.name} uses the {skill_name} skill on {object_name}: {details_str}"
         if success_level > 0:
-            outcome_summary += "\n  -> " + action_data.get("success_text", "It works!")
-            if target_exit: # If an exit was successfully opened, remove the action lock
+            success_text = action_data.get("success_text", "It works!")
+            outcome_summary += f"\n  -> SUCCESS! {success_text}"
+            # If an exit was successfully opened, remove the action lock
+            if target_exit: 
                 target_exit.pop("action", None)
+            # If the action reveals inventory, add it to the object in the game state
+            if "inventory" in action_data:
+                target_interactive.setdefault('items', []).extend(action_data["inventory"])
+                # The action is consumed after revealing items
+                target_interactive.pop("action", None)
         else:
             outcome_summary += "\n  -> " + action_data.get("failure_text", "Nothing happens.")
         return outcome_summary
@@ -348,6 +412,63 @@ def execute_skill_check(actor_name, skill_name=None, target_name=None, object_na
     outcome_summary += f"\n  {actor.name}'s roll: {details_str}"
     return outcome_summary
 
+def execute_take_item(actor_name, source_name, item_name):
+    """Takes an item from an object (e.g., a chest) or an incapacitated character."""
+    all_entities = game_state["players"] + game_state["npcs"]
+    actor = next((e for e in all_entities if e.name.lower() == actor_name.lower()), None)
+    if not actor: return f"Action failed: Could not find actor '{actor_name}'."
+
+    actor_room_data = game_state["environment"].get_room(actor.current_room)
+    
+    # --- Case 1: Taking from an object in the room ---
+    source_object = next((obj for obj in actor_room_data.get("objects", []) if obj["name"].lower() == source_name.lower()), None)
+    if source_object:
+        available_items = source_object.get("items", [])
+        
+        # Find all items where the user's input is a partial match
+        possible_matches = [item for item in available_items if item_name.lower() in item['name'].lower()]
+
+        if len(possible_matches) == 0:
+            return f"There is no item named '{item_name}' on the {source_name}."
+        
+        elif len(possible_matches) > 1:
+            # If input is ambiguous, ask for clarification
+            item_names = ", ".join([f"'{item['name']}'" for item in possible_matches])
+            return f"Your request was ambiguous. Did you mean one of these: {item_names}?"
+        
+        else:
+            # Exactly one match found, proceed to take it
+            item_to_take = possible_matches[0]
+            actor.inventory.append(item_to_take)
+            available_items.remove(item_to_take)
+            return f"{actor.name} takes the {item_to_take['name']} from the {source_name}."
+
+    # --- Case 2: Taking from a character ---
+    source_char = next((e for e in all_entities if e.name.lower() == source_name.lower()), None)
+    if source_char:
+        if source_char.current_room != actor.current_room:
+            return f"Cannot take from {source_name}; they are not in the same room."
+        if not source_char.is_incapacitated():
+            return f"Cannot take from {source_name}; they are not incapacitated."
+
+        # Search both inventory and equipment
+        source_inventory = source_char.inventory + source_char.equipment
+        item_to_take = next((item for item in source_inventory if item['name'].lower() == item_name.lower()), None)
+        
+        if not item_to_take:
+            return f"{source_name} does not have an item named '{item_name}'."
+
+        # Move item from source character to actor
+        actor.inventory.append(item_to_take)
+        try:
+            if item_to_take in source_char.inventory: source_char.inventory.remove(item_to_take)
+            if item_to_take in source_char.equipment: source_char.equipment.remove(item_to_take)
+        except ValueError:
+            pass # Item already removed
+        return f"{actor.name} takes the {item_name} from the incapacitated {source_name}."
+
+    return f"Cannot find a source named '{source_name}' to take from."
+
 def pass_turn(actor_name, reason="", **kwargs):
     """Allows a character to wait, speak, or do nothing for their turn."""
     cleaned_reason = reason.strip().strip('"')
@@ -361,6 +482,10 @@ available_tools = [
             "description": "Get a detailed description of the current room, including objects, exits, and other characters.",
             "parameters": {"type": "object", "properties": {}, "required": []}}},
     {   "type": "function", "function": {
+            "name": "execute_check_self",
+            "description": "Check your own character's status, including health, condition, equipment, and inventory.",
+            "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {   "type": "function", "function": {
             "name": "execute_move",
             "description": "Move your character through a named exit into an adjacent room.",
             "parameters": {"type": "object", "properties": { "exit_name": {"type": "string", "description": "The name of the exit to move through, e.g., 'Stone Archway'."}}, "required": ["exit_name"]}}},
@@ -370,11 +495,17 @@ available_tools = [
             "parameters": {"type": "object", "properties": { "target_name": {"type": "string", "description": "The name of the character being attacked."}}, "required": ["target_name"]}}},
     {   "type": "function", "function": {
             "name": "execute_skill_check",
-            "description": "Use a skill on an object, an exit, or another character.",
+            "description": "Use a skill on an object, an exit, or another character. Required for actions like searching, investigating, lifting, tracking, etc.",
             "parameters": {"type": "object", "properties": {
                 "skill_name": {"type": "string", "description": "The name of the skill being used, e.g., 'Search', 'Lifting'."},
                 "target_name": {"type": "string", "description": "Optional: The character being targeted by the skill."},
                 "object_name": {"type": "string", "description": "Optional: The object or exit being targeted by the skill."}}, "required": ["skill_name"]}}},
+    {   "type": "function", "function": {
+            "name": "execute_take_item",
+            "description": "Take a specific item from a container, an object, or an incapacitated character.",
+            "parameters": {"type": "object", "properties": {
+                "item_name": {"type": "string", "description": "The name of the item to take."},
+                "source_name": {"type": "string", "description": "The name of the object or character to take the item from."}}, "required": ["item_name", "source_name"]}}},
     {   "type": "function", "function": {
             "name": "pass_turn",
             "description": "Use this if the character wants to wait, do nothing, defend, or say something that doesn't require a skill check.",
@@ -387,11 +518,11 @@ def get_llm_action_and_execute(command, actor, is_combat):
     which then chooses an action (a function) to execute.
     """
     actor_room = game_state["environment"].get_room(actor.current_room)
-    other_chars_in_room = [e.name for e in game_state['players'] + game_state['enemies'] if e.id != actor.id and e.current_room == actor.current_room]
+    other_chars_in_room = [e.name for e in game_state['players'] + game_state['npcs'] if e.id != actor.id and e.current_room == actor.current_room]
     
     # Choose the appropriate prompt based on whether it's combat or not
     prompt_template_key = "combat" if is_combat else "non_combat"
-    prompt_template = scenario_data["prompts"]["action_selection"][prompt_template_key]
+    prompt_template = scenario_data["prompts"][prompt_template_key]
     prompt = prompt_template.format(
         room_name=actor_room.get("name"),
         room_description=actor_room.get("description"),
@@ -404,10 +535,10 @@ def get_llm_action_and_execute(command, actor, is_combat):
     if DEBUG: print(f"\n[DEBUG] PROMPT FOR LLM ACTION:\n---\n{prompt}\n---\n")
 
     # Prepare and send the request to the AI model
-    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json"}
     payload = {"model": ACTION_MODEL, "messages": [{"role": "user", "content": prompt}], "tools": available_tools, "tool_choice": "auto"}
     try:
-        response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=30).json()
+        response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
         if DEBUG: print(f"[DEBUG] LLM Action Response: {json.dumps(response, indent=2)}")
 
         message = response.get("choices", [{}])[0].get("message", {})
@@ -423,9 +554,11 @@ def get_llm_action_and_execute(command, actor, is_combat):
         # Call the chosen function
         if function_name == "execute_melee_attack": return execute_melee_attack(**arguments)
         if function_name == "execute_skill_check": return execute_skill_check(**arguments)
+        if function_name == "execute_take_item": return execute_take_item(**arguments)
         if function_name == "pass_turn": return pass_turn(**arguments)
         if function_name == "execute_move": return execute_move(**arguments)
         if function_name == "execute_look": return execute_look(**arguments)
+        if function_name == "execute_check_self": return execute_check_self(**arguments)
         
         return f"Error: The AI tried to call an unknown function '{function_name}'."
     except Exception as e:
@@ -437,7 +570,7 @@ def get_enemy_action(enemy_actor, is_combat_mode, last_summary):
     Determines an NPC's action based on its personality and the current situation.
     """
     # --- Special logic for mindless traps ---
-    if enemy_actor.personality == "mindless, mechanical":
+    if "mindless" in enemy_actor.statuses and "mechanical" in enemy_actor.statuses:
         if enemy_actor.is_incapacitated():
             return f"The {enemy_actor.name} lies dormant on the floor, already sprung."
             
@@ -445,7 +578,7 @@ def get_enemy_action(enemy_actor, is_combat_mode, last_summary):
         if players_in_room:
             # The trap makes an opposed check to see if it can ambush a player
             player_to_ambush = random.choice(players_in_room)
-            trap_stealth_pips = enemy_actor.get_attribute_or_skill_pips("Stealth")
+            trap_stealth_pips = enemy_actor.get_attribute_or_skill_pips("Hide")
             trap_roll, _ = roll_d6_dice(trap_stealth_pips)
             player_perception_pips = player_to_ambush.get_attribute_or_skill_pips("Perception")
             player_roll, _ = roll_d6_dice(player_perception_pips)
@@ -459,7 +592,7 @@ def get_enemy_action(enemy_actor, is_combat_mode, last_summary):
                 return f"The {enemy_actor.name} remains hidden, but {player_to_ambush.name} spots it!"
         return f"The {enemy_actor.name} sits silently."
 
-    # --- Standard combat logic for hostile enemies ---
+    # --- Standard combat logic for hostile npcs ---
     if is_combat_mode and enemy_actor.attitude == ATTITUDE_HOSTILE:
         active_players_in_room = [p for p in game_state["players"] if not p.is_incapacitated() and p.current_room == enemy_actor.current_room]
         if active_players_in_room:
@@ -477,10 +610,10 @@ def get_npc_dialogue(actor, context):
     prompt_template = scenario_data["prompts"]["npc_dialogue"]
     prompt = prompt_template.format(actor_description=actor_description, context=context)
     
-    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json"}
     payload = {"model": NARRATIVE_MODEL, "messages": [{"role": "user", "content": prompt}], "max_tokens": 60}
     try:
-        response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=30).json()
+        response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
         dialogue = response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
         return f'{actor.name}: "{dialogue}"' if dialogue else f"{actor.name} remains silent."
     except Exception as e:
@@ -498,7 +631,7 @@ def get_llm_story_response(mechanical_summary, actor):
         str: A story-like description of the events.
     """
     actor_room_key = actor.current_room
-    entities_in_room = [e for e in game_state['players'] + game_state['enemies'] if e.current_room == actor_room_key]
+    entities_in_room = [e for e in game_state['players'] + game_state['npcs'] if e.current_room == actor_room_key]
     statuses = "\n".join([p.get_status_summary() for p in entities_in_room]) if entities_in_room else "None"
     
     actor_room = game_state["environment"].get_room(actor.current_room)
@@ -513,10 +646,10 @@ def get_llm_story_response(mechanical_summary, actor):
         mechanical_summary=mechanical_summary
     )
     
-    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json"}
     payload = {"model": NARRATIVE_MODEL, "messages": [{"role": "user", "content": prompt}]}
     try:
-        response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=30).json()
+        response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
         return response.get("choices", [{}])[0].get("message", {}).get("content", "").strip() or f"LLM (empty response): {mechanical_summary}"
     except Exception as e:
         return f"LLM Error: Could not get narration. {e}"
@@ -548,10 +681,10 @@ def setup_initial_encounter():
     char_configs = scenario_data.get("characters", {})
     for player_config in char_configs.get("players", []):
         sheet = load_character_sheet(os.path.join(characters_dir, player_config["sheet"]))
-        if sheet: game_state["players"].append(GameEntity(sheet, player_config["starting_room"]))
-    for enemy_config in char_configs.get("enemies", []):
+        if sheet: game_state["players"].append(GameEntity(sheet, player_config["location"]))
+    for enemy_config in char_configs.get("npcs", []):
         sheet = load_character_sheet(os.path.join(characters_dir, enemy_config["sheet"]))
-        if sheet: game_state["enemies"].append(GameEntity(sheet, enemy_config["starting_room"]))
+        if sheet: game_state["npcs"].append(GameEntity(sheet, enemy_config["location"]))
 
     if not game_state["players"]:
         print("No players loaded. Exiting.")
@@ -568,7 +701,7 @@ def roll_initiative():
     if not player_room: return
     
     # Find all combat participants in the current room
-    participants = [e for e in game_state["players"] + game_state["enemies"] if not e.is_incapacitated() and e.attitude == ATTITUDE_HOSTILE and e.current_room == player_room]
+    participants = [e for e in game_state["players"] + game_state["npcs"] if not e.is_incapacitated() and e.attitude == ATTITUDE_HOSTILE and e.current_room == player_room]
     for entity in participants:
         entity.initiative_roll, _ = roll_d6_dice(entity.get_attribute_or_skill_pips("Perception"))
 
@@ -599,7 +732,7 @@ def main_game_loop():
             return
 
         # Keywords to help determine the type of input
-        action_keywords = ["attack", "climb", "lift", "run", "swim", "dodge", "fly", "ride", "pilot", "operate", "pick", "repair", "craft", "track", "move", "go", "enter", "use", "look", "search"]
+        action_keywords = ["attack", "climb", "lift", "run", "swim", "dodge", "fly", "ride", "pilot", "operate", "pick", "repair", "craft", "track", "move", "go", "enter", "use", "look", "search", "take", "get", "grab", "check", "status", "inventory"]
         mechanical_summary_keywords = ["attack:", "hit!", "miss!", "roll:", "success", "failure", "vs dn"]
         
         player = game_state["players"][0]
@@ -608,14 +741,15 @@ def main_game_loop():
 
         is_combat_mode = False
         turn_summaries = []
-        # Initial turn order is just players then enemies
-        game_state["turn_order"] = game_state["players"] + game_state["enemies"] 
+        # Initial turn order is just players then npcs
+        game_state["turn_order"] = game_state["players"] + game_state["npcs"]
+        last_active_actor = player
 
         # --- The Game Loop ---
         while True:
             # Check if combat should start or end
             player_room = game_state["players"][0].current_room
-            hostiles_in_room = any(e.attitude == ATTITUDE_HOSTILE and e.current_room == player_room and not e.is_incapacitated() for e in game_state["enemies"])
+            hostiles_in_room = any(e.attitude == ATTITUDE_HOSTILE and e.current_room == player_room and not e.is_incapacitated() for e in game_state["npcs"])
             
             # Start combat if it's not already active and there are hostiles
             if not is_combat_mode and hostiles_in_room and any(p.attitude == ATTITUDE_HOSTILE for p in game_state["players"]):
@@ -633,12 +767,12 @@ def main_game_loop():
             elif is_combat_mode and not hostiles_in_room:
                 print("\n" + "="*20); print("COMBAT ENDS. No active hostiles present."); print("="*20)
                 is_combat_mode = False
-                game_state["turn_order"] = game_state["players"] + game_state["enemies"]
+                game_state["turn_order"] = game_state["players"] + game_state["npcs"]
                 game_state["current_turn_entity_index"] = 0
 
             # --- End of Round Summary ---
             if game_state["current_turn_entity_index"] >= len(game_state["turn_order"]):
-                last_turn_actor = game_state["turn_order"][game_state["current_turn_entity_index"]-1] if game_state["turn_order"] else player
+                last_turn_actor = last_active_actor
                 # Find the last significant action to summarize for the narrator
                 action_summary_for_narrator = next((s for s in reversed(turn_summaries) if any(k in s.lower() for k in mechanical_summary_keywords)), "The characters paused and took in their surroundings.")
                 print(f"\nNARRATIVE SUMMARY:\n{get_llm_story_response(action_summary_for_narrator, last_turn_actor)}\n")
@@ -668,9 +802,8 @@ def main_game_loop():
             summary = ""
             if current_entity.is_incapacitated():
                 summary = f"{current_entity.name} is incapacitated and cannot act."
-                if current_entity.personality == "mindless, mechanical":
+                if "mindless" in current_entity.statuses and "mechanical" in current_entity.statuses:
                     summary = f"The {current_entity.name} lies dormant on the floor, already sprung."
-                print(summary)
             else:
                 # --- Player's Turn ---
                 if current_entity in game_state["players"]:
@@ -692,16 +825,19 @@ def main_game_loop():
 
             # Print the outcome of the turn
             if summary:
-                print(f"\n-- Outcome for {current_entity.name}'s turn --\n{summary}\n----------------------------------")
-                turn_summaries.append(summary)
+                # Check if the summary is just dialogue.
+                # Dialogue from pass_turn() and get_npc_dialogue() looks like: "ActorName: "Some text""
+                is_dialogue = summary.strip().startswith(f'{current_entity.name}: "') and summary.strip().endswith('"')
 
-            # --- Check for End Game Conditions ---
-            if all(e.is_incapacitated() for e in game_state["enemies"]):
-                print(f"\nVICTORY! All enemies have been defeated!")
-                break
-            if all(p.is_incapacitated() for p in game_state["players"]):
-                print(f"\nGAME OVER! All players are incapacitated!")
-                break
+                if is_dialogue:
+                    print(f"\n{summary}\n") # Print only the dialogue
+                else:
+                    # For all other actions, use the detailed outcome format
+                    print(f"\n-- Outcome for {current_entity.name}'s turn --\n{summary}\n----------------------------------")
+                
+                turn_summaries.append(summary)
+                last_active_actor = current_entity
+
 
             # Move to the next character in the turn order
             game_state["current_turn_entity_index"] += 1

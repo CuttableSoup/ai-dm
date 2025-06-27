@@ -1,6 +1,6 @@
 {
     "id": "trap",
-    "name": "Spike Trap",
+    "name": "A spike Trap",
     "wounds": 7,
     "attitudes": [
         {
@@ -27,7 +27,7 @@
             "name": "Spikes",
             "skill": "Brawling",
             "range": "melee",
-            "effect": "physical,single",
+            "effect": ["physical","single"],
             "location": "hand",
             "quality": "poor",
             "value": 3,

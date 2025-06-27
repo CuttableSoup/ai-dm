@@ -82,7 +82,7 @@
             "description": "golden plain band"
         }
     ],
-    "gear": [
+    "inventory": [
         {
             "type": "Weapon",
             "name": "Gun",
