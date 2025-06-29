@@ -188,7 +188,7 @@
             {
                 "sheet": "d6_trap.json",
                 "location": {
-                    "room": "antechamber",
+                    "room": "shrine_clearing",
                     "zone": 2
                 }
             },
