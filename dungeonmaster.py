@@ -102,7 +102,7 @@ class GameEntity:
         self.current_wound_index = WOUND_LEVEL_HEALTHY
         self.initiative_roll = 0
         
-        # --- MODIFIED: Location is now a dictionary including room and zone ---
+        # Location is a dictionary including room and zone
         self.current_room = location.get("room")
         self.current_zone = location.get("zone")
 
@@ -117,7 +117,7 @@ class GameEntity:
 
     def get_status_summary(self):
         """Provides a quick summary of the character's current state, including location."""
-        # --- MODIFIED: Status summary now includes zone ---
+        # Status summary now includes zone
         base_summary = f"{self.name} (Status: {self.get_wound_status()}, Room: {self.current_room}, Zone: {self.current_zone})"
         return base_summary
 
@@ -187,13 +187,17 @@ class GameEntity:
             if item.get("type", "").lower() == "weapon":
                 return item # Return the first equipped weapon
         
-        # --- MODIFIED: Default unarmed strike now includes range ---
+        # Default unarmed strike now includes range
         return {"name": "Unarmed", "skill": "brawling", "damage": self.attributes.get("physique", 6), "range": 0}
 
 # --- 3. Discrete Action Functions ---
 # These functions define the specific actions characters can take in the game.
-
-# --- NEW: Helper function to calculate distance between zones ---
+#
+# NOTE: All 'actor_name' parameters have been changed to 'actor' (the GameEntity object)
+# to prevent ambiguous lookups. The redundant lookups at the start of each function
+# have been removed.
+#
+# --- Helper function to calculate distance between zones ---
 def get_zone_distance(start_zone, end_zone, room_key):
     """
     Calculates the shortest distance in zones between a start and end zone using BFS.
@@ -231,10 +235,8 @@ def get_zone_distance(start_zone, end_zone, room_key):
     
     return -1 # Target was not found/unreachable
 
-# --- MODIFIED: `look` now describes zones and locations within them ---
-def execute_look(actor_name, **kwargs):
+def execute_look(actor, **kwargs):
     """Provides a detailed description of the character's current surroundings, including zones."""
-    actor = next((e for e in game_state["players"] + game_state["npcs"] if e.name.lower() == actor_name.lower()), None)
     if not actor: return "Could not find actor to 'look' for."
 
     room = game_state["environment"].get_room(actor.current_room)
@@ -252,7 +254,8 @@ def execute_look(actor_name, **kwargs):
         zone_name = zone_data.get('name', '')
         response += f"\n  [Zone {zone_num} - {zone_name}]"
         
-        chars_in_zone = [e.name for e in all_chars if e.current_room == actor.current_room and e.current_zone == int(zone_num)]
+        # Only show characters who are not mindless (like traps) unless they've been discovered
+        chars_in_zone = [e.name for e in all_chars if e.current_room == actor.current_room and e.current_zone == int(zone_num) and ("discovered" in e.statuses or "mindless" not in e.statuses)]
         if chars_in_zone:
             response += f" Characters: {', '.join(chars_in_zone)}."
 
@@ -273,10 +276,9 @@ def execute_look(actor_name, **kwargs):
     
     return response
 
-def execute_check_self(actor_name, **kwargs):
+def execute_check_self(actor, **kwargs):
     """Provides a summary of the character's own status, equipment, and inventory."""
-    actor = next((e for e in game_state["players"] if e.name.lower() == actor_name.lower()), None)
-    if not actor: return f"Could not find player '{actor_name}'."
+    if not actor: return f"Could not find player to check."
     
     response = f"--- Status for {actor.name} ---\n"
     response += f"Condition: {actor.get_wound_status()}\n"
@@ -291,11 +293,9 @@ def execute_check_self(actor_name, **kwargs):
     response += "Inventory: " + (", ".join(inventory_items) if inventory_items else "Empty") + "\n"
     return response
 
-# --- MODIFIED: `move` between rooms now checks if the player is in the correct zone to use an exit ---
-def execute_move(actor_name, exit_name):
+def execute_move(actor, exit_name):
     """Moves the character through a specified exit to another room."""
-    actor = next((e for e in game_state["players"] + game_state["npcs"] if e.name.lower() == actor_name.lower()), None)
-    if not actor: return f"Action failed: Could not find actor '{actor_name}'."
+    if not actor: return f"Action failed: Could not find actor to move."
 
     room = game_state["environment"].get_room(actor.current_room)
     if not room: return f"{actor.name} is in an unknown location and cannot move."
@@ -319,11 +319,9 @@ def execute_move(actor_name, exit_name):
     actor.current_zone = 1
     return f"{actor.name} moves through the {exit_name} into the {destination_room.get('name', 'next room')}."
 
-# --- NEW: Function to move between zones in the same room ---
-def execute_move_zone(actor_name, target_zone):
-    """Moves the character to an ADJACENT zone within the current room."""
-    actor = next((e for e in game_state["players"] + game_state["npcs"] if e.name.lower() == actor_name.lower()), None)
-    if not actor: return f"Action failed: Could not find actor '{actor_name}'."
+def execute_move_zone(actor, target_zone):
+    """Moves the character to an ADJACENT zone and performs a passive search for traps."""
+    if not actor: return f"Action failed: Could not find actor to move."
 
     room_data = game_state["environment"].get_room(actor.current_room)
     if not room_data: return f"{actor.name} is in an unknown location."
@@ -340,24 +338,63 @@ def execute_move_zone(actor_name, target_zone):
         return f"Cannot move to Zone {target_zone}. From here, you can only move to: {', '.join(map(str, current_zone_data.get('adjacent_zones', ['Nowhere'])))}."
 
     actor.current_zone = target_zone
-    return f"{actor.name} moves to Zone {target_zone}."
+    move_summary = f"{actor.name} moves to Zone {target_zone}."
 
-# --- REPLACED: `execute_melee_attack` is now a more general `execute_attack` that checks range ---
-def execute_attack(actor_name, target_name):
+    # --- NEW: Passive perception check for traps upon entering the new zone. ---
+    all_entities = game_state["players"] + game_state["npcs"]
+    hidden_entities = [e for e in all_entities if e.id != actor.id and e.current_room == actor.current_room and e.current_zone == actor.current_zone and "discovered" not in e.statuses]
+
+    for entity in hidden_entities:
+        # Check if the hidden entity is a trap
+        if "mindless" in entity.statuses and "mechanical" in entity.statuses:
+            perception_pips = actor.get_attribute_or_skill_pips("perception")
+            hide_pips = entity.get_attribute_or_skill_pips("hide")
+            hide_roll_total, _ = roll_d6_dice(hide_pips)
+            success_level, _, perception_roll_str = roll_d6_check(actor, perception_pips, hide_roll_total)
+
+            if success_level > 0:
+                # Player spots the trap! Append to the summary.
+                move_summary += f"\n  -> As {actor.name} enters, they spot {entity.name}! ({perception_roll_str} vs Hide DN {hide_roll_total})"
+                # Add actor to allies so the trap won't spring on them.
+                if entity.allies == "none":
+                    entity.allies = actor.name
+                else:
+                    entity.allies += f", {actor.name}"
+                entity.statuses.append("discovered")
+
+    return move_summary
+
+def execute_attack(actor, target_name):
     """Executes an attack, checking the weapon's range against the target's distance."""
     all_entities = game_state["players"] + game_state["npcs"]
-    actor = next((e for e in all_entities if e.name.lower() == actor_name.lower()), None)
-    # This function only finds characters, so passing an object name will fail.
     target_entity = next((e for e in all_entities if e.name.lower() == target_name.lower()), None)
     
-    if not actor: return f"Action failed: Could not find actor '{actor_name}'."
+    if not actor: return f"Action failed: Could not find attacker."
     if not target_entity: return f"Action failed: Could not find target '{target_name}'."
     if actor.current_room != target_entity.current_room: return f"Action failed: {target_name} is not in the same room."
 
+    # Prevent attacking allies
+    if actor.name in target_entity.allies or target_entity.name in actor.allies:
+        return f"Action failed: {actor.name} cannot attack an ally, {target_name}."
+
     # Get the actor's equipped weapon (or unarmed) and its range
     weapon = actor.get_weapon_details()
-    weapon_range = weapon.get("range", 0)
-    
+    weapon_range_value = weapon.get("range", 0)
+
+    # Convert descriptive range to a numerical value for comparison
+    weapon_range = 0
+    if isinstance(weapon_range_value, str):
+        if weapon_range_value.lower() == "melee":
+            weapon_range = 0
+        else:
+            try:
+                # Try to convert other string values to a number
+                weapon_range = int(weapon_range_value)
+            except (ValueError, TypeError):
+                weapon_range = 0 # Default to melee if conversion fails
+    elif isinstance(weapon_range_value, int):
+        weapon_range = weapon_range_value
+
     # Calculate distance in zones and check if target is in range
     distance = get_zone_distance(actor.current_zone, target_entity.current_zone, actor.current_room)
     if distance == -1 or distance > weapon_range:
@@ -391,15 +428,46 @@ def execute_attack(actor_name, target_name):
         
     return outcome_summary
 
-def execute_skill_check(actor_name, skill_name=None, target_name=None, object_name=None):
+def execute_skill_check(actor, skill_name=None, target_name=None, object_name=None):
     """Performs a general skill check against a target, an object, or a static difficulty."""
     all_entities = game_state["players"] + game_state["npcs"]
-    actor = next((e for e in all_entities if e.name.lower() == actor_name.lower()), None)
-    if not actor: return f"Action failed: Could not find actor '{actor_name}'."
+    if not actor: return f"Action failed: Could not find actor for skill check."
     
     actor_room_data = game_state["environment"].get_room(actor.current_room)
-    
-    # --- Logic for interacting with an object or exit ---
+
+    # Logic for a general search of the current zone to find hidden entities
+    if skill_name and skill_name.lower() == 'search' and not target_name and not object_name:
+        outcome_summary = ""
+        found_something = False
+        # Find entities in the same zone that haven't been discovered yet
+        hidden_entities = [e for e in all_entities if e.id != actor.id and e.current_room == actor.current_room and e.current_zone == actor.current_zone and "discovered" not in e.statuses]
+
+        for entity in hidden_entities:
+            hide_pips = entity.get_attribute_or_skill_pips("hide")
+            # If the entity has a hide skill, it's potentially hidden
+            if hide_pips > 0:
+                search_pips = actor.get_attribute_or_skill_pips("search")
+                # Opposed Roll: Search vs. Hide
+                hide_roll_total, _ = roll_d6_dice(hide_pips)
+                success_level, _, search_roll_str = roll_d6_check(actor, search_pips, hide_roll_total)
+
+                if success_level > 0:
+                    found_something = True
+                    outcome_summary += f"{actor.name} discovers {entity.name}! ({search_roll_str} vs Hide DN {hide_roll_total})\n"
+                    # Add the actor to the entity's allies so it won't attack them
+                    if entity.allies == "none":
+                        entity.allies = actor.name
+                    else:
+                        entity.allies += f", {actor.name}"
+                    # Mark as discovered to prevent it from being found again
+                    entity.statuses.append("discovered")
+
+        if not found_something:
+            return f"{actor.name} searches the area but finds nothing unusual."
+        else:
+            return outcome_summary.strip()
+            
+    # Logic for interacting with an object or exit
     if object_name:
         target_object = next((obj for obj in actor_room_data.get("objects", []) if obj["name"].lower() == object_name.lower()), None)
         target_exit = next((ext for ext in actor_room_data.get("exits", []) if ext["name"].lower() == object_name.lower()), None)
@@ -408,12 +476,17 @@ def execute_skill_check(actor_name, skill_name=None, target_name=None, object_na
         if not target_interactive:
             return f"{actor.name} can't find an object or exit named '{object_name}' to interact with."
         
-        # --- MODIFIED: Check if actor is in the right zone to interact with the object/exit ---
+        # Check if actor is in the right zone to interact
         if 'zone' in target_interactive and actor.current_zone != target_interactive['zone']:
              return f"You must move to Zone {target_interactive['zone']} to interact with the {object_name}."
 
         action_data = target_interactive.get("action")
-        if not action_data: return f"'{object_name}' is not interactive in that way."
+        # Handle searching non-interactive objects gracefully
+        if not action_data:
+            if skill_name and skill_name.lower() == 'search':
+                return f"{actor.name} searches the {object_name}, but finds nothing of interest."
+            return f"'{object_name}' is not interactive in that way."
+
         if not skill_name: skill_name = action_data.get("skill")
         if action_data.get("skill", "").lower() != skill_name.lower():
             return f"You can't use '{skill_name}' on '{object_name}'."
@@ -433,12 +506,11 @@ def execute_skill_check(actor_name, skill_name=None, target_name=None, object_na
             outcome_summary += "\n  -> " + action_data.get("failure_text", "Nothing happens.")
         return outcome_summary
 
-    # --- Logic for an opposed skill check against another character ---
+    # Logic for an opposed skill check against another character
     if target_name:
         target_entity = next((e for e in all_entities if e.name.lower() == target_name.lower()), None)
-        # This is the source of the "Could not find target" error if the AI misuses this parameter.
         if not target_entity: return f"Action failed: Could not find target '{target_name}'."
-        # --- MODIFIED: Opposed skill checks now require being in the same zone ---
+        # Opposed checks require being in the same zone
         if actor.current_room != target_entity.current_room or actor.current_zone != target_entity.current_zone:
              return f"Action failed: {target_name} is not in the same zone."
         if not skill_name: return f"Action failed: must specify a skill to use on {target_name}."
@@ -459,7 +531,7 @@ def execute_skill_check(actor_name, skill_name=None, target_name=None, object_na
         outcome_summary += f"\n  {actor.name}'s roll: {details_str} vs Resistance DN {final_difficulty}."
         return outcome_summary
 
-    # --- Logic for a general skill check against a static difficulty ---
+    # Logic for a general skill check against a static difficulty
     if not skill_name:
         return "Action failed: You must specify a skill to use."
     outcome_summary = f"{actor.name} attempts to use their {skill_name} skill."
@@ -470,18 +542,17 @@ def execute_skill_check(actor_name, skill_name=None, target_name=None, object_na
     outcome_summary += f"\n  {actor.name}'s roll: {details_str}"
     return outcome_summary
 
-def execute_take_item(actor_name, source_name, item_name):
+def execute_take_item(actor, source_name, item_name):
     """Takes an item from an object or an incapacitated character."""
     all_entities = game_state["players"] + game_state["npcs"]
-    actor = next((e for e in all_entities if e.name.lower() == actor_name.lower()), None)
-    if not actor: return f"Action failed: Could not find actor '{actor_name}'."
+    if not actor: return f"Action failed: Could not find actor to take item."
 
     actor_room_data = game_state["environment"].get_room(actor.current_room)
     
     # --- Case 1: Taking from an object in the room ---
     source_object = next((obj for obj in actor_room_data.get("objects", []) if obj["name"].lower() == source_name.lower()), None)
     if source_object:
-        # --- MODIFIED: Check if actor is in the same zone as the object ---
+        # Check if actor is in the same zone as the object
         if actor.current_zone != source_object.get("zone"):
             return f"You must be in Zone {source_object.get('zone')} to take items from the {source_name}."
 
@@ -520,10 +591,9 @@ def execute_take_item(actor_name, source_name, item_name):
 
     return f"Cannot find a source named '{source_name}' to take from."
 
-def execute_drop_item(actor_name, item_name):
+def execute_drop_item(actor, item_name):
     """Removes an item from a character's inventory and places it in a pile on the floor in their current zone."""
-    actor = next((e for e in game_state["players"] + game_state["npcs"] if e.name.lower() == actor_name.lower()), None)
-    if not actor: return f"Action failed: Could not find actor '{actor_name}'."
+    if not actor: return f"Action failed: Could not find actor to drop item."
 
     item_to_drop = next((item for item in actor.inventory if item['name'].lower() == item_name.lower()), None)
     if item_to_drop:
@@ -554,10 +624,9 @@ def execute_drop_item(actor_name, item_name):
     pile_object.setdefault("items", []).append(item_to_drop)
     return f"{actor.name} drops the {item_to_drop['name']} on the ground."
 
-def execute_equip_item(actor_name, item_name):
+def execute_equip_item(actor, item_name):
     """Moves an item from inventory to equipment, checking for occupied location slots."""
-    actor = next((e for e in game_state["players"] + game_state["npcs"] if e.name.lower() == actor_name.lower()), None)
-    if not actor: return f"Action failed: Could not find actor '{actor_name}'."
+    if not actor: return f"Action failed: Could not find actor to equip item."
 
     item_to_equip = next((item for item in actor.inventory if item['name'].lower() == item_name.lower()), None)
     if not item_to_equip:
@@ -580,10 +649,9 @@ def execute_equip_item(actor_name, item_name):
     actor.equipment.append(item_to_equip)
     return f"{actor.name} equips the {item_to_equip['name']}."
 
-def execute_unequip_item(actor_name, item_name):
+def execute_unequip_item(actor, item_name):
     """Moves an item from equipment back to inventory."""
-    actor = next((e for e in game_state["players"] + game_state["npcs"] if e.name.lower() == actor_name.lower()), None)
-    if not actor: return f"Action failed: Could not find actor '{actor_name}'."
+    if not actor: return f"Action failed: Could not find actor to unequip item."
 
     item_to_unequip = next((item for item in actor.equipment if item['name'].lower() == item_name.lower()), None)
     if not item_to_unequip:
@@ -593,13 +661,14 @@ def execute_unequip_item(actor_name, item_name):
     actor.inventory.append(item_to_unequip)
     return f"{actor.name} unequips the {item_to_unequip['name']}."
 
-def pass_turn(actor_name, reason="", **kwargs):
+def pass_turn(actor, reason="", **kwargs):
     """Allows a character to wait, speak, or do nothing for their turn."""
+    if not actor: return "A nameless entity passes its turn."
     cleaned_reason = reason.strip().strip('"')
-    return f'{actor_name}: "{cleaned_reason}"' if cleaned_reason else f"{actor_name} waits."
+    return f'{actor.name}: "{cleaned_reason}"' if cleaned_reason else f"{actor.name} waits."
 
 # --- 4. AI Tool Definitions & Execution ---
-# --- MODIFIED: The toolset is updated for zones, range, and new actions ---
+# The toolset is updated for zones, range, and new actions
 available_tools = [
     {   "type": "function", "function": {
             "name": "execute_look", "description": "Get a detailed description of the current room, including zones, objects, exits, and other characters.",
@@ -611,13 +680,13 @@ available_tools = [
             "name": "execute_move", "description": "Move your character through a named exit into an adjacent room.",
             "parameters": {"type": "object", "properties": { "exit_name": {"type": "string", "description": "The name of the exit to move through."}}, "required": ["exit_name"]}}},
     {   "type": "function", "function": {
-            "name": "execute_move_zone", "description": "Move to an adjacent numbered zone within the current room to change position.",
+            "name": "execute_move_zone", "description": "Move to an adjacent numbered zone within the current room to change position. This triggers a passive perception check for traps.",
             "parameters": {"type": "object", "properties": { "target_zone": {"type": "integer", "description": "The number of the adjacent zone to move to."}}, "required": ["target_zone"]}}},
     {   "type": "function", "function": {
             "name": "execute_attack", "description": "Performs an attack against a single target in the same room. The success depends on weapon range and zone distance.",
             "parameters": {"type": "object", "properties": { "target_name": {"type": "string", "description": "The name of the character being attacked."}}, "required": ["target_name"]}}},
     {   "type": "function", "function": {
-            "name": "execute_skill_check", "description": "Use a skill on an object, an exit, or another character in the same zone.",
+            "name": "execute_skill_check", "description": "Use a skill on an object, an exit, or another character. To search the general area for hidden things, provide 'Search' as the skill_name and nothing else.",
             "parameters": {"type": "object", "properties": {
                 "skill_name": {"type": "string", "description": "The name of the skill being used, e.g., 'Search'."},
                 "target_name": {"type": "string", "description": "Optional: The character being targeted by the skill (must be in the same zone)."},
@@ -632,11 +701,11 @@ available_tools = [
             "parameters": {"type": "object", "properties": {
                 "item_name": {"type": "string", "description": "The name of the item you want to drop."}}, "required": ["item_name"]}}},
     {   "type": "function", "function": {
-            "name": "execute_equip_item", "description": "Equip an item from your inventory. You cannot equip an item if the location (e.g. head, chest, hands) is already full.",
+            "name": "execute_equip_item", "description": "Equip or take out an item from your inventory. You cannot equip an item if the location (e.g. head, chest, hands) is already full.",
             "parameters": {"type": "object", "properties": {
                 "item_name": {"type": "string", "description": "The name of the item from your inventory to equip."}}, "required": ["item_name"]}}},
     {   "type": "function", "function": {
-            "name": "execute_unequip_item", "description": "Unequip an item, moving it from your equipment to your inventory.",
+            "name": "execute_unequip_item", "description": "Unequip, stow, or put away an item, moving it from your equipment to your inventory.",
             "parameters": {"type": "object", "properties": {
                 "item_name": {"type": "string", "description": "The name of the item you are currently wearing/wielding."}}, "required": ["item_name"]}}},
     {   "type": "function", "function": {
@@ -658,7 +727,7 @@ def get_llm_action_and_execute(command, actor, is_combat):
     objects_in_room = [o for o in actor_room.get("objects", [])]
     object_locations = ", ".join([f"{o['name']} in Zone {o.get('zone', 'N/A')}" for o in objects_in_room]) or 'None'
 
-    # --- FIXED: Replaced vague prompts with a more explicit, rule-based prompt to guide the AI ---
+    # An explicit, rule-based prompt to guide the AI
     prompt_template = """You are an AI assistant for a text-based game. Your task is to translate a player's command into a specific function call.
 Player Command: '{command}'
 
@@ -674,21 +743,25 @@ Player Command: '{command}'
     - If yes, call `execute_attack`.
     - The `target_name` parameter MUST be a character from the 'Characters Present' list.
 
-2.  **Is the command using a skill (like search, lift, investigate, track) on an OBJECT or EXIT?**
+2.  **Is the command to search the general area (e.g., 'search the room')?**
+    - If yes, you **MUST** call `execute_skill_check` with ONLY the `skill_name` 'Search'.
+    - Do **NOT** provide `object_name` or `target_name`.
+
+3.  **Is the command using a skill (like search, lift, investigate) on an OBJECT or EXIT?**
     - If yes, you **MUST** call `execute_skill_check`.
     - The `skill_name` should be the skill used (e.g., 'Search').
     - The `object_name` **MUST** be the name of the object/exit from the 'Interactable Objects & Exits Present' list (e.g., 'Crumbling Stones').
     - Do **NOT** use the `target_name` parameter for objects/exits.
 
-3.  **Is the command using a skill on another CHARACTER?**
+4.  **Is the command using a skill on another CHARACTER?**
     - If yes, call `execute_skill_check`.
     - The `target_name` **MUST** be a character from the 'Characters Present' list.
     - Do **NOT** use the `object_name` parameter for characters.
 
-4.  **Is the command to move between ZONES?**
+5.  **Is the command to move between ZONES?**
     - If yes, call `execute_move_zone`.
 
-5.  **If none of the above rules match**, choose another appropriate function like `execute_look`, `execute_move` (for room exits), `execute_take_item`, or `pass_turn`.
+6.  **If none of the above rules match**, choose another appropriate function like `execute_look`, `execute_move` (for room exits), `execute_take_item`, or `pass_turn`.
 
 Based on these strict rules, select the correct function and parameters.
 """
@@ -718,20 +791,20 @@ Based on these strict rules, select the correct function and parameters.
         tool_call = message['tool_calls'][0]['function']
         function_name = tool_call['name']
         arguments = json.loads(tool_call['arguments'])
-        arguments['actor_name'] = actor.name
-
+        
+        # NOTE: Pass the 'actor' object directly instead of a name to avoid ambiguity.
         # Call the chosen function
-        if function_name == "execute_attack": return execute_attack(**arguments)
-        if function_name == "execute_skill_check": return execute_skill_check(**arguments)
-        if function_name == "execute_take_item": return execute_take_item(**arguments)
-        if function_name == "execute_drop_item": return execute_drop_item(**arguments)
-        if function_name == "execute_equip_item": return execute_equip_item(**arguments)
-        if function_name == "execute_unequip_item": return execute_unequip_item(**arguments)
-        if function_name == "pass_turn": return pass_turn(**arguments)
-        if function_name == "execute_move": return execute_move(**arguments)
-        if function_name == "execute_move_zone": return execute_move_zone(**arguments)
-        if function_name == "execute_look": return execute_look(**arguments)
-        if function_name == "execute_check_self": return execute_check_self(**arguments)
+        if function_name == "execute_attack": return execute_attack(actor, **arguments)
+        if function_name == "execute_skill_check": return execute_skill_check(actor, **arguments)
+        if function_name == "execute_take_item": return execute_take_item(actor, **arguments)
+        if function_name == "execute_drop_item": return execute_drop_item(actor, **arguments)
+        if function_name == "execute_equip_item": return execute_equip_item(actor, **arguments)
+        if function_name == "execute_unequip_item": return execute_unequip_item(actor, **arguments)
+        if function_name == "pass_turn": return pass_turn(actor, **arguments)
+        if function_name == "execute_move": return execute_move(actor, **arguments)
+        if function_name == "execute_move_zone": return execute_move_zone(actor, **arguments)
+        if function_name == "execute_look": return execute_look(actor, **arguments)
+        if function_name == "execute_check_self": return execute_check_self(actor, **arguments)
         
         return f"Error: The AI tried to call an unknown function '{function_name}'."
     except Exception as e:
@@ -746,27 +819,48 @@ def get_enemy_action(enemy_actor, is_combat_mode, last_summary):
     if "mindless" in enemy_actor.statuses and "mechanical" in enemy_actor.statuses:
         # Mindless traps only act if a player enters their specific zone
         if enemy_actor.is_incapacitated():
-            return f"The {enemy_actor.name} lies dormant on the floor, already sprung."
+            return "" # Suppress output for sprung traps
             
         players_in_zone = [p for p in game_state["players"] if p.current_room == enemy_actor.current_room and p.current_zone == enemy_actor.current_zone and not p.is_incapacitated()]
-        if players_in_zone:
-            # The trap makes an attack against a random player in its zone
-            player_to_ambush = random.choice(players_in_zone)
-            attack_summary = execute_attack(actor_name=enemy_actor.name, target_name=player_to_ambush.name)
-            enemy_actor.current_wound_index = WOUND_LEVEL_DEAD # Mark the trap as sprung
-            attack_summary += f"\n  -> The {enemy_actor.name} has been sprung!"
+        
+        # Check if any players in the zone are NOT allies of the trap (e.g., they haven't found it yet)
+        valid_targets = [p for p in players_in_zone if p.name not in enemy_actor.allies]
+
+        if valid_targets:
+            # The trap makes an attack against a random valid target in its zone
+            player_to_ambush = random.choice(valid_targets)
+            # NOTE: Pass the 'enemy_actor' object directly.
+            attack_summary = execute_attack(enemy_actor, target_name=player_to_ambush.name)
+            # Fragile traps are destroyed after one attack
+            if "fragile" in enemy_actor.statuses:
+                enemy_actor.current_wound_index = WOUND_LEVEL_DEAD 
+                attack_summary += f"\n  -> The {enemy_actor.name} has been sprung!"
             return attack_summary
-        return f"The {enemy_actor.name} sits silently."
+        # Return an empty string to suppress "sits silently" message
+        return ""
 
     # --- Standard combat logic for hostile npcs ---
     if is_combat_mode and enemy_actor.attitude == ATTITUDE_HOSTILE:
-        # --- MODIFIED: Enemy AI is now zone-aware ---
+        # Enemy AI is now zone-aware
         players_in_room = [p for p in game_state["players"] if p.current_room == enemy_actor.current_room and not p.is_incapacitated()]
         if not players_in_room:
-             return pass_turn(actor_name=enemy_actor.name, reason="All targets have fled or are defeated.")
+             return pass_turn(enemy_actor, reason="All targets have fled or are defeated.")
         
         weapon = enemy_actor.get_weapon_details()
-        weapon_range = weapon.get("range", 0)
+        weapon_range_value = weapon.get("range", 0)
+
+        # Convert descriptive range to a numerical value for comparison
+        weapon_range = 0
+        if isinstance(weapon_range_value, str):
+            if weapon_range_value.lower() == "melee":
+                weapon_range = 0
+            else:
+                try:
+                    weapon_range = int(weapon_range_value)
+                except (ValueError, TypeError):
+                    weapon_range = 0
+        elif isinstance(weapon_range_value, int):
+            weapon_range = weapon_range_value
         
         # Find all players that are within the weapon's range
         targets_in_range = []
@@ -777,7 +871,8 @@ def get_enemy_action(enemy_actor, is_combat_mode, last_summary):
         
         # If there's a target in range, attack it.
         if targets_in_range:
-            return execute_attack(actor_name=enemy_actor.name, target_name=random.choice(targets_in_range).name)
+            # NOTE: Pass the 'enemy_actor' object directly.
+            return execute_attack(enemy_actor, target_name=random.choice(targets_in_range).name)
         else:
             # If no target is in range, try to move closer to the nearest player.
             nearest_player = min(players_in_room, key=lambda p: get_zone_distance(enemy_actor.current_zone, p.current_zone, enemy_actor.current_room))
@@ -787,9 +882,10 @@ def get_enemy_action(enemy_actor, is_combat_mode, last_summary):
             # Simple AI: move to the first adjacent zone that gets it closer.
             for zone in adj_zones:
                 if get_zone_distance(zone, nearest_player.current_zone, enemy_actor.current_room) < current_dist:
-                    return execute_move_zone(actor_name=enemy_actor.name, target_zone=zone)
+                    # NOTE: Pass the 'enemy_actor' object directly.
+                    return execute_move_zone(enemy_actor, target_zone=zone)
             # If no move gets it closer, wait.
-            return pass_turn(actor_name=enemy_actor.name, reason="is unable to get closer.")
+            return pass_turn(enemy_actor, reason="is unable to get closer.")
 
     # --- Non-combat or non-hostile dialogue ---
     return get_npc_dialogue(enemy_actor, last_summary)
@@ -919,7 +1015,8 @@ def main_game_loop():
         mechanical_summary_keywords = ["attack:", "hit!", "miss!", "roll:", "success", "failure", "vs dn"]
         
         player = game_state["players"][0]
-        initial_look = execute_look(player.name)
+        # NOTE: Pass the 'player' object directly.
+        initial_look = execute_look(player)
         print(f"\nSCENE START: {scenario_data.get('scenario_name', 'Unnamed Scenario')}\n{initial_look}")
 
         is_combat_mode = False
@@ -984,7 +1081,10 @@ def main_game_loop():
 
             summary = ""
             if current_entity.is_incapacitated():
-                summary = f"{current_entity.name} is incapacitated and cannot act."
+                # --- MODIFIED: Suppress "cannot act" message for mindless traps ---
+                is_mindless_trap = "mindless" in current_entity.statuses and "mechanical" in current_entity.statuses
+                if not is_mindless_trap:
+                    summary = f"{current_entity.name} is incapacitated and cannot act."
             else:
                 # --- Player's Turn ---
                 if current_entity in game_state["players"]:
@@ -997,14 +1097,15 @@ def main_game_loop():
                     if any(keyword in command.lower() for keyword in action_keywords):
                         summary = get_llm_action_and_execute(command, current_entity, is_combat_mode)
                     else: # Otherwise, treat it as simple dialogue
-                        summary = pass_turn(actor_name=current_entity.name, reason=command)
+                        # NOTE: Pass the 'current_entity' object directly.
+                        summary = pass_turn(current_entity, reason=command)
                 
                 # --- NPC's Turn ---
                 else:
                     last_summary = turn_summaries[-1] if turn_summaries else "The scene begins."
                     summary = get_enemy_action(current_entity, is_combat_mode, last_summary)
 
-            # Print the outcome of the turn
+            # Print the outcome of the turn, but only if there is something to say
             if summary:
                 # Check if the summary is just dialogue.
                 is_dialogue = summary.strip().startswith(f'{current_entity.name}: "') and summary.strip().endswith('"')

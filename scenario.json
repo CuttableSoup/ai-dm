@@ -46,7 +46,7 @@
             "antechamber": {
                 "name": "Antechamber",
                 "description": "A damp, stone antechamber. The floor is dusty. A large, iron-bound wooden door stands to the north.",
-                 "zones": {
+                "zones": {
                     "1": { "name": "Entrance", "description": "Just inside the archway from the clearing.", "adjacent_zones": [2] },
                     "2": { "name": "Center", "description": "The center of the antechamber. The floor is strangely clean here.", "adjacent_zones": [1, 3] },
                     "3": { "name": "North Door", "description": "Before a large iron-bound door.", "adjacent_zones": [2] }
@@ -86,13 +86,41 @@
         }
     },
     "characters": {
-        "players": [{
-            "sheet": "d6_warrior.json",
-            "location": { "room": "shrine_clearing", "zone": 1 }
-        }],
+        "players": [
+            {
+                "sheet": "d6_warrior.json",
+                "location":
+                {
+                    "room": "shrine_clearing",
+                    "zone": 1
+                }
+            }
+        ],
         "npcs": [
-            { "sheet": "d6_orc.json", "location": { "room": "inner_sanctum", "zone": 2 } }, 
-            { "sheet": "d6_trap.json", "location": { "room": "antechamber", "zone": 2 } }
+            {
+                "sheet": "d6_orc.json",
+                "location":
+                {
+                    "room": "inner_sanctum",
+                    "zone": 2
+                }
+            },
+            {
+                "sheet": "d6_trap.json",
+                "location":
+                {
+                    "room": "antechamber",
+                    "zone": 2
+                }
+            },
+            {
+                "sheet": "d6_trap.json",
+                "location":
+                {
+                    "room": "shrine_clearing",
+                    "zone": 2
+                }
+            }
         ]
     },
     "prompts": {
