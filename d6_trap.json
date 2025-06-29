@@ -4,10 +4,15 @@
     "wounds": 7,
     "attitudes": [
         {
-            "default": "hostile"
+            "default": "Hostile"
         }
     ],
-    "statuses": ["mindless","mechanical","static","fragile"],
+    "statuses": [
+        "mindless",
+        "mechanical",
+        "static",
+        "fragile"
+    ],
     "allies": "Grog",
     "attributes": {
         "Agility": 0,
@@ -27,11 +32,17 @@
             "name": "Spikes",
             "skill": "Brawling",
             "range": "melee",
-            "effect": ["physical","single"],
+            "effect": [
+                "physical",
+                "single"
+            ],
             "location": "hand",
             "quality": "poor",
             "value": 3,
             "description": "rusty"
         }
-    ]
+    ],
+    "experience": 0,
+    "inventory": [],
+    "current_wound_index": 7
 }

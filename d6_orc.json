@@ -14,9 +14,16 @@
         "religion": "none",
         "movitations": "greed"
     },
-    "languages": ["orc"],
-    "personality": ["selfish","gullible"],
-    "statuses": ["none"],
+    "languages": [
+        "orc"
+    ],
+    "personality": [
+        "selfish",
+        "gullible"
+    ],
+    "statuses": [
+        "none"
+    ],
     "attitudes": [
         {
             "default": "indifferent"
@@ -41,7 +48,10 @@
             "name": "Fists",
             "skill": "Brawling",
             "range": "melee",
-            "effect": ["physical","single"],
+            "effect": [
+                "physical",
+                "single"
+            ],
             "location": "hand",
             "quality": "good",
             "value": 3,
@@ -52,7 +62,10 @@
             "name": "hide",
             "skill": "none",
             "range": "none",
-            "effect": ["physical","single"],
+            "effect": [
+                "physical",
+                "single"
+            ],
             "location": "chest",
             "quality": "poor",
             "value": 3,
@@ -77,5 +90,7 @@
             "subject": "Valerius",
             "content": "fellow warrior met on the battlefield, took Grog's eye in combat"
         }
-    ]
+    ],
+    "experience": 0,
+    "current_wound_index": 7
 }
