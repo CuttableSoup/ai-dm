@@ -4,122 +4,101 @@
         "starting_room": "shrine_clearing",
         "rooms": {
             "shrine_clearing": {
-                    "name": "Shrine Clearing",
-                    "description": "A mossy clearing in an ancient forest, littered with crumbling stones from a forgotten shrine. A chill hangs in the air. A dark stone archway leads north into the shrine itself.",
-                    "objects": [
-                        {
-                            "name": "Crumbling Stones",
-                            "description": "Piles of moss-covered stones from the collapsed shrine walls. They look heavy.",
-                            "action": {
-                                "skill": "Search",
-                                "difficulty": 10,
-                                "success_text": "Tucked away under a large stone, you find a small, forgotten leather pouch containing a few old coins.",
-                                "inventory": [
-                                    {
-                                        "type": "treasure",
-                                        "name": "Gold coins",
-                                        "skill": "none",
-                                        "range": "none",
-                                        "effect": "none",
-                                        "location": "none",
-                                        "quality": "good",
-                                        "value": 10,
-                                        "description": "currency"
-                                    }
-                                ]
-                            }
-                        }
-                    ],
-                "exits": [
-                    {
-                        "name": "Stone Archway",
-                        "to_room": "antechamber",
-                        "description": "A dark archway leading north."
+                "name": "Shrine Clearing",
+                "description": "A mossy clearing in an ancient forest, littered with crumbling stones. A chill hangs in the air. A dark stone archway is visible to the north.",
+                "zones": {
+                    "1": {
+                        "name": "Forest Edge",
+                        "description": "The southern edge of the clearing, where the forest is thickest.",
+                        "adjacent_zones": [2]
+                    },
+                    "2": {
+                        "name": "Center Clearing",
+                        "description": "The middle of the clearing, littered with stones.",
+                        "adjacent_zones": [1, 3]
+                    },
+                    "3": {
+                        "name": "Shrine Entrance",
+                        "description": "The northern part of the clearing, right before a stone archway.",
+                        "adjacent_zones": [2]
                     }
-                ]
+                },
+                "objects": [{
+                    "name": "Crumbling Stones",
+                    "description": "Piles of moss-covered stones.",
+                    "zone": 2,
+                    "action": {
+                        "skill": "Search",
+                        "difficulty": 10,
+                        "success_text": "Under a large stone, you find a small, forgotten leather pouch.",
+                        "inventory": [{
+                            "type": "treasure", "name": "Gold coins", "value": 10, "description": "currency"
+                        }]
+                    }
+                }],
+                "exits": [{
+                    "name": "Stone Archway",
+                    "to_room": "antechamber",
+                    "description": "A dark archway leading north.",
+                    "zone": 3
+                }]
             },
             "antechamber": {
                 "name": "Antechamber",
-                "description": "You are in a damp, stone antechamber. The floor is dusty and uneven. A large, iron-bound wooden door stands to the north. The way back to the clearing is south.",
-                "objects": [
-                    {
-                        "name": "Dusty Floor",
-                        "description": "The floor is covered in a thick layer of undisturbed dust, except for what you just tracked in.",
-                        "action": {
-                            "skill": "Tracking",
-                            "difficulty": 12,
-                            "success_text": "You notice faint, heavy tracks leading towards the northern door. Orc tracks. You also spot subtle markings near the center of the room, suggesting a pressure plate."
-                        }
+                "description": "A damp, stone antechamber. The floor is dusty. A large, iron-bound wooden door stands to the north.",
+                 "zones": {
+                    "1": { "name": "Entrance", "description": "Just inside the archway from the clearing.", "adjacent_zones": [2] },
+                    "2": { "name": "Center", "description": "The center of the antechamber. The floor is strangely clean here.", "adjacent_zones": [1, 3] },
+                    "3": { "name": "North Door", "description": "Before a large iron-bound door.", "adjacent_zones": [2] }
+                },
+                "objects": [{
+                    "name": "Dusty Floor",
+                    "description": "The floor is covered in thick dust.",
+                    "zone": 1,
+                    "action": {
+                        "skill": "Tracking", "difficulty": 12, "success_text": "You notice faint, heavy tracks leading towards the northern door. Orc tracks."
                     }
-                ],
+                }],
                 "exits": [
-                    {
-                        "name": "Clearing",
-                        "to_room": "shrine_clearing",
-                        "description": "The way out to the south."
-                    },
-                    {
-                        "name": "Iron-bound Door",
-                        "to_room": "inner_sanctum",
-                        "description": "A heavy door to the north.",
-                        "action": {
-                            "skill": "Lifting",
-                            "difficulty": 8,
-                            "success_text": "With a great heave, you shove the heavy door open."
-                        }
+                    { "name": "Clearing", "to_room": "shrine_clearing", "description": "The way out to the south.", "zone": 1 },
+                    { "name": "Iron-bound Door", "to_room": "inner_sanctum", "description": "A heavy door to the north.", "zone": 3,
+                        "action": { "skill": "Lifting", "difficulty": 8, "success_text": "You shove the heavy door open." }
                     }
                 ]
             },
             "inner_sanctum": {
                 "name": "Inner Sanctum",
-                "description": "This circular chamber houses a large, ominous-looking altar in the center. The air is thick with a sense of dread. The only exit is the heavy door to the south.",
+                "description": "This circular chamber houses a large, ominous-looking altar. The air is thick with dread.",
+                "zones": {
+                    "1": { "name": "Entrance", "description": "By the door leading from the antechamber.", "adjacent_zones": [2] },
+                    "2": { "name": "Altar", "description": "A large stone altar stained with old, dark patches.", "adjacent_zones": [1] }
+                },
                 "objects": [{
                     "name": "Ominous Altar",
-                    "description": "A large stone altar stained with old, dark patches. It feels cold to the touch.",
-                    "action": {
-                        "skill": "Investigation",
-                        "difficulty": 15,
-                        "success_text": "You discover hidden compartments on the altar containing a potion.",
-                        "inventory": [
-                            {
-                                "type": "consumable",
-                                "name": "Potion of Healing",
-                                "skill": "none",
-                                "range": "melee",
-                                "effect": ["heal","single"],
-                                "location": "hand",
-                                "quality": "good",
-                                "value": 3,
-                                "description": "glass bottle of luminous blue fluid"
-                            }
-                        ]
+                    "description": "It feels cold to the touch.",
+                    "zone": 2,
+                    "action": { "skill": "Investigation", "difficulty": 15, "success_text": "You discover hidden compartments containing a potion.",
+                        "inventory": [{ "type": "consumable", "name": "Potion of Healing", "description": "A bottle of luminous blue fluid." }]
                     }
                 }],
-                "exits": [{
-                    "name": "Antechamber",
-                    "to_room": "antechamber",
-                    "description": "The way out to the south."
-                }]
+                "exits": [{ "name": "Antechamber Door", "to_room": "antechamber", "description": "The way out to the south.", "zone": 1 }]
             }
         }
     },
     "characters": {
         "players": [{
             "sheet": "d6_warrior.json",
-            "location": "shrine_clearing"
+            "location": { "room": "shrine_clearing", "zone": 1 }
         }],
-        "npcs": [{
-            "sheet": "d6_orc.json",
-            "location": "inner_sanctum"
-        }, {
-            "sheet": "d6_trap.json",
-            "location": "antechamber"
-        }]
+        "npcs": [
+            { "sheet": "d6_orc.json", "location": { "room": "inner_sanctum", "zone": 2 } }, 
+            { "sheet": "d6_trap.json", "location": { "room": "antechamber", "zone": 2 } }
+        ]
     },
     "prompts": {
-        "combat": "You are in combat in the {room_name}. Description: {room_description}\nYour status: {actor_description}.\nVisible Characters: {other_chars}.\nExits: {exits}.\nYour command is: '{command}'. Based on your character's traits, choose the best function to execute this command.",
-        "non_combat": "You are in the {room_name}. Description: {room_description}\nYour status: {actor_description}.\nVisible Characters: {other_chars}.\nObjects: {objects}.\nExits: {exits}.\nYour intention is: '{command}'.\n\n**Instruction**: You MUST select a function from the available tools. For actions using a character skill (Search, Lift, Track, etc.), you MUST use the 'execute_skill_check' function. When using this function, specify the skill in `skill_name`. If interacting with an inanimate object (like 'Crumbling Stones') or an exit, use the `object_name` parameter. Only use the `target_name` parameter when targeting another character. Choose the best function to execute the command.",
-        "npc_dialogue": "You are roleplaying as an NPC. Your character's status: {actor_description}.\nThe last thing that happened was: {context}\nBased on your personality, traits, and the situation, write a single, compelling line of dialogue for your character to say now. Do not surround your response with quotes.",
-        "narrative_summary": "You are a Game Master narrating a story.\n\n**Context:**\n- The character who just acted is: {actor_name}.\n- The current location is the {room_name}: {room_description}.\n- Other entities in this room are:\n{statuses}\n- The specific mechanical outcome of the action was:\n---\n{mechanical_summary}\n---\n\n**Your Task:**\nWrite a 2-3 sentence narrative description of what just happened.\n\n**Strict Rules:**\n1. The narration must be in the third person, describing the actions of {actor_name}.\n2. ONLY describe things that could be perceived from within the {room_name}. Do NOT invent details about other rooms.\n3. Do NOT assign actions to inanimate objects like traps. The actor is {actor_name}.\n4. When describing a skill use (like Search, Lift, etc.), narrate the character's physical actions and what they discovered as a result. Do not personify the skill (e.g., instead of 'your Search skill reveals', say 'searching the area, you find...')."
+        "combat": "You are in combat in the {room_name} ({room_description}).\nYour status: {actor_description}.\nYou are in Zone {actor_zone}. You can move to adjacent Zone(s): {adjacent_zones}.\nScene Status: Characters: {character_locations}. Objects: {object_locations}.\nYour command is: '{command}'. Based on the situation, choose the best function.",
+        "non_combat": "You are in the {room_name} ({room_description}).\nYour status: {actor_description}.\nYou are in Zone {actor_zone}. You can move to adjacent Zone(s): {adjacent_zones}.\nScene Status: Characters: {character_locations}. Objects: {object_locations}.\nYour command is: '{command}'. Based on the situation, choose the best function.",
+        "npc_dialogue": "You are roleplaying as an NPC. Your status: {actor_description}. The last thing that happened was: {context}\nBased on your personality, traits, and the situation, write a single, compelling line of dialogue. Do not add quotes.",
+        "narrative_summary": "You are a Game Master narrating a story.\n\nContext:\n- Actor: {actor_name}.\n- Location: {room_name} ({room_description}).\n- Room Statuses:\n{statuses}\n- Mechanical Outcome:\n---\n{mechanical_summary}\n---\n\nYour Task: Write a 2-3 sentence narrative description of what just happened in the third person. ONLY describe what could be perceived from within the room."
     }
 }
