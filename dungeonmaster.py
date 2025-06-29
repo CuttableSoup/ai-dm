@@ -340,21 +340,21 @@ def execute_move_zone(actor, target_zone):
     actor.current_zone = target_zone
     move_summary = f"{actor.name} moves to Zone {target_zone}."
 
-    # --- NEW: Passive perception check for traps upon entering the new zone. ---
+    # --- NEW: Passive search check for traps upon entering the new zone. ---
     all_entities = game_state["players"] + game_state["npcs"]
     hidden_entities = [e for e in all_entities if e.id != actor.id and e.current_room == actor.current_room and e.current_zone == actor.current_zone and "discovered" not in e.statuses]
 
     for entity in hidden_entities:
         # Check if the hidden entity is a trap
         if "mindless" in entity.statuses and "mechanical" in entity.statuses:
-            perception_pips = actor.get_attribute_or_skill_pips("perception")
+            search_pips = actor.get_attribute_or_skill_pips("search")
             hide_pips = entity.get_attribute_or_skill_pips("hide")
             hide_roll_total, _ = roll_d6_dice(hide_pips)
-            success_level, _, perception_roll_str = roll_d6_check(actor, perception_pips, hide_roll_total)
+            success_level, _, search_roll_str = roll_d6_check(actor, search_pips, hide_roll_total)
 
             if success_level > 0:
                 # Player spots the trap! Append to the summary.
-                move_summary += f"\n  -> As {actor.name} enters, they spot {entity.name}! ({perception_roll_str} vs Hide DN {hide_roll_total})"
+                move_summary += f"\n  -> As {actor.name} enters, they spot {entity.name}! ({search_roll_str} vs Hide DN {hide_roll_total})"
                 # Add actor to allies so the trap won't spring on them.
                 if entity.allies == "none":
                     entity.allies = actor.name
