@@ -173,7 +173,7 @@
                 "sheet": "d6_warrior.json",
                 "location": {
                     "room": "shrine_clearing",
-                    "zone": 2
+                    "zone": 1
                 }
             }
         ],
