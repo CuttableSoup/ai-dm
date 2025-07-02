@@ -3,6 +3,7 @@
     "name": "Valerius",
     "wounds": 7,
     "qualities": {
+        "occupation": "adventurer",
         "race": "human",
         "gender": "male",
         "eyes": "brown",

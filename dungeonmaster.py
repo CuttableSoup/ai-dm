@@ -346,7 +346,7 @@ def execute_move_zone(actor, target_zone):
 
     for entity in hidden_entities:
         # Check if the hidden entity is a trap
-        if "mindless" in entity.statuses and "mechanical" in entity.statuses:
+        if "trap" in entity.statuses:
             search_pips = actor.get_attribute_or_skill_pips("search")
             hide_pips = entity.get_attribute_or_skill_pips("hide")
             hide_roll_total, _ = roll_d6_dice(hide_pips)
@@ -816,7 +816,7 @@ def get_enemy_action(enemy_actor, is_combat_mode, last_summary):
     Determines an NPC's action based on its personality and the current situation.
     """
     # --- Special logic for mindless traps ---
-    if "mindless" in enemy_actor.statuses and "mechanical" in enemy_actor.statuses:
+    if "trap" in enemy_actor.statuses:
         # Mindless traps only act if a player enters their specific zone
         if enemy_actor.is_incapacitated():
             return "" # Suppress output for sprung traps
@@ -1082,7 +1082,7 @@ def main_game_loop():
             summary = ""
             if current_entity.is_incapacitated():
                 # --- MODIFIED: Suppress "cannot act" message for mindless traps ---
-                is_mindless_trap = "mindless" in current_entity.statuses and "mechanical" in current_entity.statuses
+                is_mindless_trap = "trap" in current_entity.statuses
                 if not is_mindless_trap:
                     summary = f"{current_entity.name} is incapacitated and cannot act."
             else:

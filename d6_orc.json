@@ -3,6 +3,7 @@
     "name": "Grog",
     "wounds": 6,
     "qualities": {
+        "occupation": "barbarian",
         "race": "orc",
         "gender": "male",
         "eyes": "black, missing one",
