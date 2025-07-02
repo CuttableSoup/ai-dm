@@ -1,7 +1,7 @@
 {
     "id": "player",
     "name": "Valerius",
-    "wounds": 7,
+    "hitpoints": 30,
     "qualities": {
         "occupation": "adventurer",
         "race": "human",
@@ -221,5 +221,5 @@
     ],
     "experience": 50,
     "allies": "none",
-    "current_wound_index": 7
+    "current_hitpoints": 30
 }

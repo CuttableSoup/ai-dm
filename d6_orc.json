@@ -1,7 +1,7 @@
 {
     "id": "npc",
     "name": "Grog",
-    "wounds": 6,
+    "hitpoints": 30,
     "qualities": {
         "occupation": "barbarian",
         "race": "orc",
@@ -93,5 +93,5 @@
         }
     ],
     "experience": 0,
-    "current_wound_index": 7
+    "current_hitpoints": 30
 }

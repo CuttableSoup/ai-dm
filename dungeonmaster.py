@@ -98,8 +98,8 @@ class GameEntity:
         self.spells = character_sheet_data.get("spells", [])
         
         # Combat-related stats
-        self.max_wounds = character_sheet_data.get("wounds", 7)
-        self.current_wound_index = WOUND_LEVEL_HEALTHY
+        self.max_hitpoints = character_sheet_data.get("hitpoints", 30)
+        self.current_hitpoints = self.max_hitpoints
         self.initiative_roll = 0
         
         # Location is a dictionary including room and zone
@@ -118,50 +118,55 @@ class GameEntity:
     def get_status_summary(self):
         """Provides a quick summary of the character's current state, including location."""
         # Status summary now includes zone
-        base_summary = f"{self.name} (Status: {self.get_wound_status()}, Room: {self.current_room}, Zone: {self.current_zone})"
+        base_summary = f"{self.name} (Status: {self.get_hitpoint_status()}, Room: {self.current_room}, Zone: {self.current_zone})"
         return base_summary
 
-    def get_wound_status(self):
-        """Returns the character's current health status as a string."""
-        return {
-            WOUND_LEVEL_HEALTHY: "Healthy", WOUND_LEVEL_STUNNED: "Stunned",
-            WOUND_LEVEL_WOUNDED: "Wounded (-1D)", WOUND_LEVEL_SEVERELY_WOUNDED: "Severely Wounded (-2D)",
-            WOUND_LEVEL_INCAPACITATED: "Incapacitated", WOUND_LEVEL_MORTALLY_WOUNDED: "Mortally Wounded",
-            WOUND_LEVEL_DEAD: "Dead"
-        }.get(self.current_wound_index, "Unknown")
+    def get_hitpoint_status(self):
+        """Returns the character's current health status as a string based on hitpoints."""
+        hp_percentage = (self.current_hitpoints / self.max_hitpoints) * 100
 
-    def get_wound_penalty_pips(self):
-        """Returns the penalty (in pips) based on how wounded the character is."""
-        if self.current_wound_index == WOUND_LEVEL_WOUNDED: return 3
-        if self.current_wound_index == WOUND_LEVEL_SEVERELY_WOUNDED: return 6
+        if hp_percentage >= 75:
+            return "Healthy"
+        elif hp_percentage >= 50:
+            return "Wounded"
+        elif hp_percentage >= 25:
+            return "Severely Wounded"
+        elif hp_percentage > 0:
+            return "Near Death"
+        else:
+            return "Incapacitated"
+
+    def get_hitpoint_penalty_pips(self):
+        """Returns the penalty (in pips) based on current hitpoints."""
+        hp_percentage = (self.current_hitpoints / self.max_hitpoints) * 100
+        if hp_percentage <= 25:
+            return 6  # Significant penalty for low health
+        elif hp_percentage <= 50:
+            return 3  # Moderate penalty
         return 0
 
+    
+
     def apply_damage(self, damage_roll_total, resistance_roll_total):
-        """Calculates and applies damage to the character."""
-        if self.is_incapacitated():
-            return f"{self.name} is already out of action."
+        """Calculates and applies damage to the character based on hitpoints."""
+        if self.current_hitpoints <= 0:
+            return f"{self.name} is already incapacitated."
             
         outcome = f"Damage roll: {damage_roll_total} vs Resistance roll: {resistance_roll_total}. "
         if damage_roll_total <= resistance_roll_total:
             outcome += f"{self.name} resists the damage."
             return outcome
 
-        damage_difference = damage_roll_total - resistance_roll_total
-        
-        target_level_from_damage = self.current_wound_index
-        if damage_difference <= 3: target_level_from_damage = WOUND_LEVEL_STUNNED
-        elif damage_difference <= 6: target_level_from_damage = WOUND_LEVEL_WOUNDED
-        elif damage_difference <= 9: target_level_from_damage = WOUND_LEVEL_SEVERELY_WOUNDED
-        elif damage_difference <= 12: target_level_from_damage = WOUND_LEVEL_INCAPACITATED
-        else: target_level_from_damage = WOUND_LEVEL_MORTALLY_WOUNDED
-        
-        self.current_wound_index = min(self.current_wound_index, target_level_from_damage)
-        outcome += f"{self.name} is now {self.get_wound_status()}!"
+        damage_taken = damage_roll_total - resistance_roll_total
+        self.current_hitpoints -= damage_taken
+        self.current_hitpoints = max(0, self.current_hitpoints) # Ensure hitpoints don't go below 0
+
+        outcome += f"{self.name} takes {damage_taken} damage and is now {self.get_hitpoint_status()} ({self.current_hitpoints}/{self.max_hitpoints} HP)!"
         return outcome
 
     def is_incapacitated(self):
         """Checks if the character is unable to take actions."""
-        return self.current_wound_index <= WOUND_LEVEL_INCAPACITATED
+        return self.current_hitpoints <= 0
 
     def get_attribute_or_skill_pips(self, trait_name):
         """Gets the total number of pips for a given attribute or skill."""
@@ -280,8 +285,8 @@ def execute_check_self(actor, **kwargs):
     """Provides a summary of the character's own status, equipment, and inventory."""
     if not actor: return f"Could not find player to check."
     
-    response = f"--- Status for {actor.name} ---\n"
-    response += f"Condition: {actor.get_wound_status()}\n"
+    response = f"--- Status for {actor.name} ---"
+    response += f"Condition: {actor.get_hitpoint_status()} ({actor.current_hitpoints}/{actor.max_hitpoints} HP)"
     response += f"Location: Room '{actor.current_room}', Zone {actor.current_zone}\n"
     response += f"Attributes: {actor.get_attribute_descriptors_string()}\n"
     
@@ -833,7 +838,7 @@ def get_enemy_action(enemy_actor, is_combat_mode, last_summary):
             attack_summary = execute_attack(enemy_actor, target_name=player_to_ambush.name)
             # Fragile traps are destroyed after one attack
             if "fragile" in enemy_actor.statuses:
-                enemy_actor.current_wound_index = WOUND_LEVEL_DEAD 
+                enemy_actor.current_hitpoints = 0 
                 attack_summary += f"\n  -> The {enemy_actor.name} has been sprung!"
             return attack_summary
         # Return an empty string to suppress "sits silently" message

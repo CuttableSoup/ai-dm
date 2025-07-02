@@ -4,14 +4,7 @@ import random
 
 # --- D6 System Constants and Rules ---
 
-# Wound level constants define the stages of injury a character can have.
-WOUND_LEVEL_HEALTHY = 6
-WOUND_LEVEL_STUNNED = 5
-WOUND_LEVEL_WOUNDED = 4
-WOUND_LEVEL_SEVERELY_WOUNDED = 3
-WOUND_LEVEL_INCAPACITATED = 2
-WOUND_LEVEL_MORTALLY_WOUNDED = 1
-WOUND_LEVEL_DEAD = 0
+
 
 # Attitude statistics represent an NPC's disposition towards the players.
 ATTITUDE_HELPFUL = "Helpful"
@@ -153,8 +146,8 @@ def roll_d6_dice(total_pips_to_roll):
 
 def roll_d6_check(actor, base_trait_pips, difficulty_number, situational_pips_modifier=0):
     """Performs a standard D6 skill check against a difficulty number."""
-    wound_penalty_pips = actor.get_wound_penalty_pips()
-    effective_pips = max(0, base_trait_pips - wound_penalty_pips + situational_pips_modifier)
+    hitpoint_penalty_pips = actor.get_hitpoint_penalty_pips()
+    effective_pips = max(0, base_trait_pips - hitpoint_penalty_pips + situational_pips_modifier)
 
     roll_total, roll_details = roll_d6_dice(effective_pips)
 

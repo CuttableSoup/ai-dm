@@ -1,7 +1,7 @@
 {
     "id": "trap",
     "name": "A spike Trap",
-    "wounds": 7,
+    "hitpoints": 30,
     "attitudes": [
         {
             "default": "Hostile"
@@ -44,5 +44,5 @@
     ],
     "experience": 0,
     "inventory": [],
-    "current_wound_index": 7
+    "current_hitpoints": 30
 }
