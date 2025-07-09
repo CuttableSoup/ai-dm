@@ -115,7 +115,8 @@
             ],
             "location": "hand",
             "quality": "good",
-            "magazine": "6/6",
+            "ammo": 6,
+            "magazine": 6,
             "value": 4,
             "description": "revolver"
         },
@@ -169,7 +170,7 @@
             "value": 12,
             "effect": [
                 "fire",
-                "area(short)"
+                "area"
             ],
             "duration": 0,
             "increment": "instant",
