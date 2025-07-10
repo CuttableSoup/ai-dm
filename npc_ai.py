@@ -1,5 +1,5 @@
 import random
-from game_state import game_state, scenario_data
+from game_state import game_state, prompts
 from d6_rules import ATTITUDE_HOSTILE
 from game_entities import get_zone_distance
 from actions import execute_attack, execute_move_zone, pass_turn
@@ -89,8 +89,8 @@ def get_npc_dialogue(actor, context):
     """
     Generates dialogue for an NPC using the narrative AI model.
     """
-    actor_description = actor.get_status_summary()
-    prompt_template = scenario_data["prompts"]["npc_dialogue"]
+    actor_description = actor.get_full_description()
+    prompt_template = prompts["npc_dialogue"]
     prompt = prompt_template.format(actor_description=actor_description, context=context)
     
     headers = {"Content-Type": "application/json"}

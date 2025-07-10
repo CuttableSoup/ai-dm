@@ -434,3 +434,37 @@ def pass_turn(actor, reason="", **kwargs):
     if not actor: return "A nameless entity passes its turn."
     cleaned_reason = reason.strip().strip('"')
     return f'{actor.name}: "{cleaned_reason}"' if cleaned_reason else f"{actor.name} waits."
+
+def execute_cast_spell(actor, spell_name, target_name=None):
+    """Casts a spell, checking for spell availability and target validity."""
+    if not actor: return f"Action failed: Could not find actor to cast spell."
+
+    # Check if the actor knows the spell
+    spell_to_cast = next((spell for spell in actor.spells if spell.get('name', '').lower() == spell_name.lower()), None)
+    if not spell_to_cast:
+        return f"{actor.name} does not know the spell '{spell_name}'."
+
+    # Basic spell information
+    spell_type = spell_to_cast.get("type", "generic")
+    spell_range = spell_to_cast.get("range", 0)
+    spell_effect = spell_to_cast.get("effect", "No effect described.")
+
+    outcome_summary = f"{actor.name} begins to cast '{spell_name}'..."
+
+    # Target validation
+    target_entity = None
+    if target_name:
+        all_entities = game_state["players"] + game_state["npcs"]
+        target_entity = next((e for e in all_entities if e.name.lower() == target_name.lower()), None)
+        if not target_entity:
+            return f"Action failed: Could not find target '{target_name}'."
+        
+        # Range check
+        distance = get_zone_distance(actor.current_zone, target_entity.current_zone, actor.current_room)
+        if distance > spell_range:
+            return f"Action failed: {target_name} is out of range for the spell '{spell_name}'."
+
+    # Placeholder for spell logic
+    outcome_summary += f"\n  -> The spell fizzles with no effect. (Spellcasting not yet implemented)."
+
+    return outcome_summary

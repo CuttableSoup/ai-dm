@@ -72,6 +72,11 @@ class GameEntity:
                 descriptors.append(f"{attr.capitalize()}: {descriptor}")
         return ", ".join(descriptors) if descriptors else "Average"
 
+    def get_full_description(self):
+        """Provides a detailed description of the character including qualities."""
+        qualities_str = ", ".join(f"{k}: {v}" for k, v in self.qualities.items())
+        return f"{self.name} ({self.get_hitpoint_status()})\nQualities: {qualities_str}"
+
     def get_status_summary(self):
         """Provides a quick summary of the character's current state, including location."""
         # Status summary now includes zone
@@ -102,8 +107,6 @@ class GameEntity:
             return 3  # Moderate penalty
         return 0
 
-    
-
     def apply_damage(self, damage_roll_total, resistance_roll_total):
         """Calculates and applies damage to the character based on hitpoints."""
         if self.current_hitpoints <= 0:
@@ -119,6 +122,17 @@ class GameEntity:
         self.current_hitpoints = max(0, self.current_hitpoints) # Ensure hitpoints don't go below 0
 
         outcome += f"{self.name} takes {damage_taken} damage and is now {self.get_hitpoint_status()} ({self.current_hitpoints}/{self.max_hitpoints} HP)!"
+        return outcome
+
+    def apply_healing(self, healing_amount):
+        """Applies healing to the character, ensuring hitpoints do not exceed max."""
+        if self.current_hitpoints <= 0:
+            return f"{self.name} is incapacitated and cannot be healed."
+
+        self.current_hitpoints += healing_amount
+        self.current_hitpoints = min(self.current_hitpoints, self.max_hitpoints)
+        
+        outcome = f"{self.name} is healed for {healing_amount} and is now {self.get_hitpoint_status()} ({self.current_hitpoints}/{self.max_hitpoints} HP)!"
         return outcome
 
     def is_incapacitated(self):

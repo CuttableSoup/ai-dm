@@ -1,7 +1,8 @@
 {
     "id": "npc",
     "name": "Grog",
-    "hitpoints": 30,
+    "max_hitpoints": 30,
+    "current_hitpoints": 30,
     "qualities": {
         "occupation": "barbarian",
         "race": "orc",
@@ -92,6 +93,5 @@
             "content": "fellow warrior met on the battlefield, took Grog's eye in combat"
         }
     ],
-    "experience": 0,
-    "current_hitpoints": 30
+    "experience": 0
 }

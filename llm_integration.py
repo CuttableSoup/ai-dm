@@ -1,7 +1,7 @@
 import json
 import requests
 from config import ACTION_MODEL, LLM_API_URL, DEBUG
-from game_state import game_state
+from game_state import game_state, prompts
 from actions import (
     execute_look, execute_check_self, execute_move, execute_move_zone,
     execute_attack, execute_skill_check, execute_take_item, execute_drop_item,
@@ -67,44 +67,7 @@ def get_llm_action_and_execute(command, actor, is_combat):
     objects_in_room = [o for o in actor_room.get("objects", [])]
     object_locations = ", ".join([f"{o['name']} in Zone {o.get('zone', 'N/A')}" for o in objects_in_room]) or 'None'
 
-    # An explicit, rule-based prompt to guide the AI
-    prompt_template = """You are an AI assistant for a text-based game. Your task is to translate a player's command into a specific function call.
-Player Command: '{command}'
-
-**CONTEXT**
-- Your Status: {actor_description}
-- Your Location: Zone {actor_zone}
-- Adjacent Zones: {adjacent_zones}
-- Characters Present: {character_locations}
-- Interactable Objects & Exits Present: {object_locations}
-
-**FUNCTION SELECTION RULES - Follow these steps:**
-1.  **Is the command an attack on a CHARACTER?**
-    - If yes, call `execute_attack`.
-    - The `target_name` parameter MUST be a character from the 'Characters Present' list.
-
-2.  **Is the command to search the general area (e.g., 'search the room')?**
-    - If yes, you **MUST** call `execute_skill_check` with ONLY the `skill_name` 'Search'.
-    - Do **NOT** provide `object_name` or `target_name`.
-
-3.  **Is the command using a skill (like search, lift, investigate) on an OBJECT or EXIT?**
-    - If yes, you **MUST** call `execute_skill_check`.
-    - The `skill_name` should be the skill used (e.g., 'Search').
-    - The `object_name` **MUST** be the name of the object/exit from the 'Interactable Objects & Exits Present' list (e.g., 'Crumbling Stones').
-    - Do **NOT** use the `target_name` parameter for objects/exits.
-
-4.  **Is the command using a skill on another CHARACTER?**
-    - If yes, call `execute_skill_check`.
-    - The `target_name` **MUST** be a character from the 'Characters Present' list.
-    - Do **NOT** use the `object_name` parameter for characters.
-
-5.  **Is the command to move between ZONES?**
-    - If yes, call `execute_move_zone`.
-
-6.  **If none of the above rules match**, choose another appropriate function like `execute_look`, `execute_move` (for room exits), `execute_take_item`, or `pass_turn`.
-
-Based on these strict rules, select the correct function and parameters.
-"""
+    prompt_template = prompts["action_prompt"]
 
     prompt = prompt_template.format(
         actor_description=actor.get_status_summary(),
@@ -125,7 +88,8 @@ Based on these strict rules, select the correct function and parameters.
 
         message = response.get("choices", [{}])[0].get("message", {})
         if not message.get("tool_calls"):
-            return f"{actor.name} is unable to decide on an action and passes the turn."
+            # MODIFIED: If the AI can't determine an action, ask for clarification instead of passing.
+            return "I don't understand that action. Please try rephrasing your request."
             
         # Extract the function name and arguments from the AI's response
         tool_call = message['tool_calls'][0]['function']

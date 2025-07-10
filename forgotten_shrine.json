@@ -200,11 +200,5 @@
                 }
             }
         ]
-    },
-    "prompts": {
-        "combat": "You are in combat in the {room_name} ({room_description}).\nYour status: {actor_description}.\nYou are in Zone {actor_zone}. You can move to adjacent Zone(s): {adjacent_zones}.\nScene Status: Characters: {character_locations}. Objects: {object_locations}.\nYour command is: '{command}'. Based on the situation, choose the best function.",
-        "non_combat": "You are in the {room_name} ({room_description}).\nYour status: {actor_description}.\nYou are in Zone {actor_zone}. You can move to adjacent Zone(s): {adjacent_zones}.\nScene Status: Characters: {character_locations}. Objects: {object_locations}.\nYour command is: '{command}'. Based on the situation, choose the best function.",
-        "npc_dialogue": "You are roleplaying as an NPC. Your status: {actor_description}. The last thing that happened was: {context}\nBased on your personality, traits, and the situation, write a single, compelling line of dialogue. Do not add quotes.",
-        "narrative_summary": "You are a Game Master narrating a story.\n\nContext:\n- Actor: {actor_name}.\n- Location: {room_name} ({room_description}).\n- Room Statuses:\n{statuses}\n- Mechanical Outcome:\n---\n{mechanical_summary}\n---\n\nYour Task: Write a 2-3 sentence narrative description of what just happened in the third person. ONLY describe what could be perceived from within the room."
     }
 }

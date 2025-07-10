@@ -1,5 +1,5 @@
 import requests
-from game_state import game_state, scenario_data
+from game_state import game_state, prompts
 from config import NARRATIVE_MODEL, LLM_API_URL
 
 def get_llm_story_response(mechanical_summary, actor):
@@ -11,7 +11,7 @@ def get_llm_story_response(mechanical_summary, actor):
     statuses = "\n".join([p.get_status_summary() for p in entities_in_room]) if entities_in_room else "None"
     
     actor_room = game_state["environment"].get_room(actor.current_room)
-    prompt_template = scenario_data["prompts"]["narrative_summary"]
+    prompt_template = prompts["narrative_summary"]
 
     # Format the prompt with all the necessary context
     prompt = prompt_template.format(

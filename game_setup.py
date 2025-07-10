@@ -1,6 +1,6 @@
 import os
 import json
-from game_state import game_state, scenario_data
+from game_state import game_state, scenario_data, prompts
 from game_entities import Environment, GameEntity
 from utils import load_character_sheet
 from d6_rules import ATTITUDE_HOSTILE, roll_d6_dice
@@ -11,6 +11,8 @@ def load_scenario(filepath):
     try:
         with open(filepath, 'r') as f:
             scenario_data.update(json.load(f))
+        with open("prompts.json", 'r') as f:
+            prompts.update(json.load(f))
             return True
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"ERROR loading scenario file {filepath}: {e}")

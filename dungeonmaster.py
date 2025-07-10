@@ -121,6 +121,11 @@ def main_game_loop():
 
             # Print the outcome of the turn, but only if there is something to say
             if summary:
+                # MODIFIED: Check for the clarification message and re-prompt if needed.
+                if summary == "I don't understand that action. Please try rephrasing your request.":
+                    print(f"\n{summary}")
+                    continue # Skip the rest of the loop to re-prompt the same player
+
                 # Check if the summary is just dialogue.
                 is_dialogue = summary.strip().startswith(f'{current_entity.name}: "') and summary.strip().endswith('"')
 
