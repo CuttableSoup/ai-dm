@@ -1,0 +1,159 @@
+Room: Governs the immediate environment.
+
+    Actors present in the room.
+
+    Objects/Items located in the room.
+
+    Exits to other rooms.
+
+    Environmental descriptions and hazards.
+
+Actor: Represents characters (Player Characters and Non-Player Characters).
+
+    Character Sheet Entries: Stats (Strength, Dexterity, etc.), skills, and proficiencies.
+
+    Inventory: Items the actor possesses.
+
+    Active Spells: Spells currently affecting the actor.
+
+    Active Effects/Conditions: Other ongoing effects like poison or blessings.
+
+    Current Hit Points/Status: Health and current state (e.g., unconscious, stable).
+
+    Faction Affiliation: Which group or faction they belong to.
+
+    Current Location: The Room the actor is in.
+
+Object/Item: Represents interactive elements and possessions.
+
+    Name & Description: What it is and how it looks.
+
+    Type: (e.g., Weapon, Armor, Consumable, Key, Treasure).
+
+    Properties/Effects: What it does (e.g., damage, healing, unlocks).
+
+    Weight/Size: For inventory management.
+
+    Equippable/Usable: Whether it can be worn or consumed.
+
+Spell: Defines magical effects.
+
+    Name & Description: What the spell is called and what it does.
+
+    Effect: The specific outcome of casting the spell.
+
+    Duration: How long the spell's effect lasts.
+
+    Target: Who or what the spell can affect.
+
+    Casting Requirements: Components, casting time.
+
+Skill/Ability: Represents an actor's proficiencies.
+
+    Name & Description: What the skill is and what it allows an actor to do.
+
+    Governing Attribute: The primary statistic that influences its use.
+
+    Associated Modifiers: How proficient the actor is with this skill.
+
+Quest/Goal: Manages overarching narrative objectives.
+
+    Name & Description: The overarching story and objective.
+
+    Status: (Active, Completed, Failed).
+
+    Objectives: A list of sub-goals to achieve the quest.
+
+    Rewards: What players gain upon completion.
+
+    Associated Entities: Relevant NPCs, locations, or items.
+
+Faction/Group: Organizes alliances and relationships.
+
+    Name & Description: Identity and purpose of the group.
+
+    Relationship Status: How the faction interacts with others (e.g., Friendly, Hostile).
+
+    Members: Actors belonging to the faction.
+
+Effect/Condition: Generic ongoing states applied to actors from various sources.
+
+    Name & Description: What the condition is and its impact.
+
+    Duration: How long the effect persists.
+
+    Source: What caused the condition.
+
+    Associated Modifiers: Numerical or narrative changes to an actor's stats or actions.
+
+Game State/Narrative State: Tracks the overall progression and key story points.
+
+    Current Player Location: Where the player character(s) are.
+
+    Active Quests: Which quests are currently in progress.
+
+    Important Flags/Events: Key narrative points that have occurred.
+
+    Player Action Log: A history of significant player choices and actions.
+
+    Time/Turn Tracker: Current game time, number of turns passed.
+
+Dialogue/Conversation Tree: Manages structured or branching conversations.
+
+    Speaker: Who is delivering the dialogue.
+
+    Text: The actual dialogue line.
+
+    Options/Responses: Player choices that can lead to different dialogue branches.
+
+    Triggers: Conditions to unlock specific dialogue options.
+
+    Effects: What happens after a dialogue option is chosen (e.g., quest update, reputation change).
+
+Encounter/Event: Defines specific, pre-designed or procedurally generated scenarios.
+
+    Name & Description: What the encounter is about.
+
+    Type: (e.g., Combat, Puzzle, Social, Exploration).
+
+    Participants: Specific actors involved.
+
+    Triggers: What causes the encounter to start.
+
+    Resolution Conditions: What needs to happen to conclude the encounter.
+
+    Outcomes: Different results based on player choices or success/failure.
+
+Rule Set/Game Mechanics: A conceptual entity representing the underlying game system rules.
+
+    Core Mechanics: How actions are resolved (e.g., dice rolls, success/failure conditions).
+
+    Combat Rules: How damage is calculated, turn order, critical hits.
+
+    Skill Check Rules: How skill checks are performed and their Difficulty Classes (DCs).
+
+    Magic System Rules: How spells are learned, cast, and their limitations.
+
+    Economy Rules: How currency works, item pricing.
+
+    Environmental Rules: How different terrains or conditions affect play.
+
+Narrative Beat/Plot Point: Granular story moments that drive the plot forward.
+
+    Name & Description: The specific narrative moment or turning point.
+
+    Prerequisites: What must happen before this beat can be triggered.
+
+    Trigger Condition: How the beat is initiated.
+
+    Impact: How this beat changes the game state or unlocks new content.
+
+Player Character (PC) State: Specific data related to the player's character(s) or party.
+
+    Focus Character: The PC currently being controlled or focused on.
+
+    Party Composition: List of all PCs currently in the party.
+
+    Party Inventory/Resources: Shared resources or items among PCs.
+
+    Party Reputation: How various entities view the player party as a whole.

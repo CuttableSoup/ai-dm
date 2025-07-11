@@ -1,10 +1,4 @@
-# d6_rules.py
-
 import random
-
-# --- D6 System Constants and Rules ---
-
-
 
 # Attitude statistics represent an NPC's disposition towards the players.
 ATTITUDE_HELPFUL = "Helpful"

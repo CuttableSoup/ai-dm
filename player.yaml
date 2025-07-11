@@ -1,0 +1,56 @@
+player_character:
+  id: player
+  name: Valerius
+  current_hitpoints: 30
+  total_hitpoints: 30
+  experience: 50
+  allies: none
+  qualities:
+    occupation: adventurer
+    race: human
+    gender: male
+    eyes: brown
+    hair: brown
+    body: lightly scarred
+    skin: tan
+    height: 72
+    weight: 180
+    religion: none
+
+  languages:
+    - common
+    - elven
+    - dwarven
+
+  personality:
+    - none
+
+  statuses:
+    - none
+
+  attitudes:
+    default: indifferent
+
+  attributes:
+    Agility: 9
+    Coordination: 9
+    Physique: 9
+    Presence: 9
+    Intellect: 9
+    Perception: 9
+
+  skills:
+    Melee_Combat: 3
+    Firearms: 3
+    Dodge: 3
+    Search: 3
+    spellcating: 3
+
+  inventory:
+    - item: Chainmail
+      quantity: 1
+      equipped: true
+
+    - item: Shield
+      quantity: 1
+      equipped: true
