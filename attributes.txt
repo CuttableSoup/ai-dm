@@ -1,7 +1,0 @@
-Agility
-Intellect
-Perception
-Physique
-Presence
-Coordination
-Extranormal
