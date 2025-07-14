@@ -41,10 +41,7 @@ player_character:
 
   skills:
     Melee_Combat: 3
-    Firearms: 3
     Dodge: 3
-    Search: 3
-    spellcating: 3
 
   inventory:
     - item: Chainmail
