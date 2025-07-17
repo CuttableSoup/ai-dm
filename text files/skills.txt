@@ -1,0 +1,254 @@
+Acrobatics
+
+    Attribute: Agility
+    Description: This skill involves performing feats of gymnastics and maintaining extraordinary balance. It can be used for dancing, performance arts, and breaking falls. It also covers escaping from bonds.
+
+Aliens
+
+    Attribute: Intellect
+    Description: This skill represents the understanding of alien species, including their physiology, customs, and history.
+
+Animal Handling
+
+    Attribute: Presence
+    Description: This skill allows a character to control animals, making them perform tricks and follow commands.
+
+Artist
+
+    Attribute: Perception
+    Description: This skill is used to create works of art, which can include paintings, photographs, music, literary compositions, and dance choreographies.
+
+Astrography
+
+    Attribute: Intellect
+    Description: This skill signifies familiarity with astronomical features like planets, star systems, and nebulae. It also includes general knowledge of civilized elements within those features, such as settlements, industry, and government installations.
+
+Brawling
+
+    Attribute: Agility
+    Description: This skill represents competence in unarmed combat.
+
+Bureaucracy
+
+    Attribute: Intellect
+    Description: This is the knowledge of a bureaucracy's procedures and the ability to use them to gain information, favors, or other goals. It also covers the understanding of how law enforcement organizations and regulations operate.
+
+Business
+
+    Attribute: Intellect
+    Description: This skill represents an understanding of business practices and the monetary value of goods and opportunities. It includes the ability to determine how to profit from another skill the character possesses. It can be used to complement haggling over prices.
+
+Charm
+
+    Attribute: Presence
+    Description: This skill involves using friendliness, flattery, or seduction to influence someone. It is also useful in business transactions, performances (like singing, acting, or storytelling), and situations requiring etiquette.
+
+Climb/Jump
+
+    Attribute: Physique
+    Description: This skill is used for scaling various surfaces and leaping over obstacles.
+
+Command
+
+    Attribute: Presence
+    Description: This is the skill of effectively ordering and coordinating others in team situations, such as commanding the crew of a battleship.
+
+Con
+
+    Attribute: Presence
+    Description: This skill involves bluffing, lying, tricking, or deceiving others. It includes verbal evasiveness, misdirection, and altering one's features or clothing to become unrecognizable. It is also useful for acting performances.
+
+Cultures
+
+    Attribute: Intellect
+    Description: This skill is the comprehension of customs, traditions, art, history, and politics of various groups.
+
+Demolitions
+
+    Attribute: Intellect
+    Description: This skill involves using explosives and corrosives to achieve specific destructive effects. Note that using grenades for special destructive effects requires this skill, not just throwing them.
+
+Disguise
+
+    Attribute: Presence
+    Description: This is the ability to alter one's features or clothing to be unrecognizable or to impersonate someone else. It is also useful in acting performances.
+
+Dodge
+
+    Attribute: Agility
+    Description: This skill is used to slip out of the way of danger, such as avoiding an attack or a sprung trap.
+
+Firearms
+
+    Attribute: Coordination
+    Description: This skill covers shooting any gun a person can carry, from small slugthrowers to shoulder-launched rockets.
+
+Forgery
+
+    Attribute: Perception
+    Description: This skill allows a character to create and notice false or altered documentation in various media, including paper and electronic formats.
+
+Gambling
+
+    Attribute: Perception
+    Description: This is the skill of winning and cheating at games of strategy and luck.
+
+Gunnery
+
+    Attribute: Coordination
+    Description: This skill is used for accurately firing weapons that are mounted on powered armor, vehicles, spaceships, or within fortresses.
+
+Hide
+
+    Attribute: Perception
+    Description: This skill is used to conceal objects on oneself or by using camouflage.
+
+Intimidation
+
+    Attribute: Presence
+    Description: This is the use of physical presence, verbal threats, taunts, or fear to influence others or extract information.
+
+Investigation
+
+    Attribute: Perception
+    Description: This skill involves gathering information, researching topics, analyzing data, and piecing together clues.
+
+Know-How
+
+    Attribute: Perception
+    Description: This skill represents the ability to figure out how to perform an action in which the character has no experience. It also serves as a catch-all for areas not covered by other skills, such as basic cooking or sewing.
+
+Languages
+
+    Attribute: Intellect
+    Description: This skill represents familiarity with and the ability to use various forms of communication, including written, spoken, and nonverbal. Characters typically know one native language fluently. Additional languages can be learned as specializations.
+
+Lifting
+
+    Attribute: Physique
+    Description: This skill is for moving or lifting heavy objects. It also represents the ability to inflict additional damage with strength-powered weapons.
+
+Lockpicking
+
+    Attribute: Coordination
+    Description: This is the skill of opening a mechanical lock or safe without the key or combination.
+
+Medicine
+
+    Attribute: Intellect
+    Description: This skill covers treating injuries, from basic first aid and dressing wounds to complex medical procedures like diagnosing illnesses, performing surgery, and implanting cybernetics.
+
+Melee Combat
+
+    Attribute: Agility
+    Description: This skill represents proficiency in wielding hand-to-hand weapons.
+
+Missile Weapons
+
+    Attribute: Coordination
+    Description: This skill is for firing unpowered ranged weapons, such as bows or slings.
+
+Navigation
+
+    Attribute: Intellect
+    Description: This skill is the ability to plot courses, whether through space using a computer or on land using maps and landmarks. It also includes map creation.
+
+Persuasion
+
+    Attribute: Presence
+    Description: This skill is used to influence others or get information through bribery, honest discussion, debate, diplomacy, or speeches. It is also useful in negotiations, business transactions, and performances like storytelling.
+
+Piloting
+
+    Attribute: Coordination
+    Description: This skill is used to operate air or space-borne craft, from fighters to battleships. It also covers single-person conveyances like powered armor, where the skill substitutes for the character's own Agility and Strength.
+
+Repair/Crafting
+
+    Attribute: Perception
+    Description: This skill allows a character to fix or modify equipment, including gadgets, weapons, armor, and vehicles. It also covers the creation of items, woodworking, and metalworking. Specific repair types can be specializations, such as for armor , exoskeletons , firearms, flight systems , gunnery , personal equipment, robots, and vehicles.
+
+Riding
+
+    Attribute: Agility
+    Description: This is the skill of controlling and riding domesticated mounts.
+
+Running
+
+    Attribute: Physique
+    Description: This skill allows for moving quickly while avoiding obstacles and preventing stumbles.
+
+Scholar
+
+    Attribute: Intellect
+    Description: This skill represents knowledge in an area not covered by another skill, such as chemistry, history, or arcane lore. It is used to recall details, rumors, legends, and important people related to a subject. A character can know the theory behind a skill via Scholar, but not be able to use it practically.
+
+Search
+
+    Attribute: Perception
+    Description: This skill is used for spotting hidden objects or people, reconnoitering, lipreading, eavesdropping, and tracking.
+
+Security
+
+    Attribute: Intellect
+    Description: This skill involves installing, altering, and bypassing electronic security and surveillance systems. It also includes knowledge of how to handle mechanical traps.
+
+Sleight of Hand
+
+    Attribute: Coordination
+    Description: This skill represents finger nimbleness and misdirection, used for picking pockets, palming items, and performing stage magic. In some cases, it can be used to open mechanical locks.
+
+Stamina
+
+    Attribute: Physique
+    Description: This skill represents physical endurance and the ability to resist pain, disease, and poison.
+
+Stealth
+
+    Attribute: Agility
+    Description: This is the skill of moving silently to avoid detection, whether by using shadows or blending into crowds.
+
+Streetwise
+
+    Attribute: Perception
+    Description: This skill is for finding information, goods, and contacts within an urban environment, especially through criminal organizations and black markets. It is also useful for figuring out the motives and methods of criminals.
+
+Survival
+
+    Attribute: Perception
+    Description: This skill provides the knowledge of techniques for surviving in hostile, wilderness environments. This can include the ability to handle animals or identify the properties of plants.
+
+Swim
+
+    Attribute: Physique
+    Description: This skill is for moving and surviving in a liquid medium.
+
+Tactics
+
+    Attribute: Intellect
+    Description: This skill represents a familiarity with deploying military forces and maneuvering them for the best advantage.
+
+Technology
+
+    Attribute: Intellect
+    Description: This skill covers the use, design, and programming of complex electronic equipment, including computers, communication devices, robots, and sensors.
+
+Throwing
+
+    Attribute: Coordination
+    Description: This skill is used to hit a target accurately with a thrown item, such as a grenade, stone, or knife. It is also used to catch thrown items.
+
+Tracking
+
+    Attribute: Perception
+    Description: This is the skill of following the trail left by a person, animal, or creature.
+
+Vehicle Operation
+
+    Attribute: Coordination
+    Description: This skill is for operating non-flying vehicles that travel on the ground or through liquid. This can include animal-drawn carts and chariots.
+
+Willpower
+
+    Attribute: Presence
+    Description: This is the ability to withstand stress, temptation, pain, and mental attacks. A specialization in a specific faith or belief system may enhance this skill.
