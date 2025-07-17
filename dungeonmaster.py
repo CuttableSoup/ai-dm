@@ -1,6 +1,7 @@
 import random
 import requests
 import json
+import yaml
 import os
 import sys
 import collections
@@ -12,21 +13,21 @@ from d6_rules import *
 ACTION_MODEL = "local-model/gemma-3-4b"  # Model used for deciding character actions
 NARRATIVE_MODEL = "local-model/gemma-3-4b" # Model used for generating descriptive text
 LLM_API_URL = "http://localhost:1234/v1/chat/completions" # Local server URL
-SCENARIO_FILE = "scenario.json"      # The file containing the game's story and setup
+SCENARIO_FILE = "scenario.yaml"      # The file containing the game's story and setup
 DEBUG = False                         # Set to True to print extra debugging information
 
 # --- Global State Variables ---
 # These variables store the game's data and are accessed throughout the program.
-scenario_data = {}  # Holds all the data from the scenario.json file
+scenario_data = {}  # Holds all the data from the scenario.yaml file
 game_state = {
-    "players": [], "npcs": [], "environment": None,
+    "players": [], "actors": [], "environment": None,
     "turn_order": [], "current_turn_entity_index": 0, "round_number": 1
 }
 
 # --- 1. Character Sheet Loading Utility ---
 def load_character_sheet(filepath):
     """
-    Loads a character sheet from a JSON file.
+    Loads a character sheet from a YAML file.
     
     Args:
         filepath (str): The path to the character sheet file.
@@ -34,14 +35,15 @@ def load_character_sheet(filepath):
     Returns:
         dict: The character data as a dictionary, or None if an error occurs.
     """
+    yaml_filepath = os.path.splitext(filepath)[0] + '.yaml'
     try:
-        with open(filepath, 'r') as f:
-            return json.load(f)
+        with open(yaml_filepath, 'r') as f:
+            return yaml.safe_load(f)
     except FileNotFoundError:
-        print(f"ERROR: Character sheet file not found at {filepath}")
+        print(f"ERROR: Character sheet file not found at {yaml_filepath}")
         return None
-    except json.JSONDecodeError:
-        print(f"ERROR: Could not parse JSON from {filepath}")
+    except yaml.YAMLError as e:
+        print(f"ERROR: Could not parse YAML from {yaml_filepath}: {e}")
         return None
 
 # --- 2. Game Entity and Environment Classes ---
@@ -91,8 +93,20 @@ class GameEntity:
         # Attributes, skills, and equipment
         self.attributes = {k.lower(): v for k, v in character_sheet_data.get("attributes", {}).items()}
         self.skills = {k.lower(): v for k, v in character_sheet_data.get("skills", {}).items()}
-        self.equipment = character_sheet_data.get("equipment", [])
-        self.inventory = character_sheet_data.get("inventory", [])
+        self.inventory = []
+        for item_data in character_sheet_data.get("inventory", []):
+            if isinstance(item_data, str):
+                item_data = {"name": item_data}
+            item_data.setdefault('equipped', False)
+            self.inventory.append(item_data)
+
+        equipped_items = []
+        for item_data in character_sheet_data.get("equipment", []):
+            if isinstance(item_data, str):
+                item_data = {"name": item_data}
+            item_data['equipped'] = True
+            equipped_items.append(item_data)
+        self.inventory.extend(equipped_items)
 
         # Spells
         self.spells = character_sheet_data.get("spells", [])
@@ -187,9 +201,9 @@ class GameEntity:
         return self.attributes.get("physique", 0)
 
     def get_weapon_details(self, weapon_name_or_type="melee"):
-        """Finds a weapon in the character's equipment."""
-        for item in self.equipment:
-            if item.get("type", "").lower() == "weapon":
+        """Finds a weapon in the character's inventory."""
+        for item in self.inventory:
+            if item.get("type", "").lower() == "weapon" and item.get('equipped'):
                 return item # Return the first equipped weapon
         
         # Default unarmed strike now includes range
@@ -251,7 +265,7 @@ def execute_look(actor, **kwargs):
     response = f"--- {room.get('name', 'Unnamed Room')} ---\n"
     response += room.get('description', 'No description available.') + "\n"
 
-    all_chars = game_state["players"] + game_state["npcs"]
+    all_chars = game_state["players"] + game_state["actors"]
     all_zones_data = room.get("zones", {})
     
     # Describe each zone, and the characters/objects within it
@@ -291,10 +305,10 @@ def execute_check_self(actor, **kwargs):
     response += f"Attributes: {actor.get_attribute_descriptors_string()}\n"
     
     # List equipped items, now showing range
-    equipped_items = [f"{item['name']} (Range: {item.get('range', 'N/A')})" for item in actor.equipment]
+    equipped_items = [f"{item['name']} (Range: {item.get('range', 'N/A')})" for item in actor.inventory if item.get('equipped')]
     response += "Equipped: " + (", ".join(equipped_items) if equipped_items else "Nothing") + "\n"
     # List inventory items
-    inventory_items = [f"{item['name']}" for item in actor.inventory]
+    inventory_items = [f"{item['name']}" for item in actor.inventory if not item.get('equipped')]
     response += "Inventory: " + (", ".join(inventory_items) if inventory_items else "Empty") + "\n"
     return response
 
@@ -346,7 +360,7 @@ def execute_move_zone(actor, target_zone):
     move_summary = f"{actor.name} moves to Zone {target_zone}."
 
     # --- NEW: Passive search check for traps upon entering the new zone. ---
-    all_entities = game_state["players"] + game_state["npcs"]
+    all_entities = game_state["players"] + game_state["actors"]
     hidden_entities = [e for e in all_entities if e.id != actor.id and e.current_room == actor.current_room and e.current_zone == actor.current_zone and "discovered" not in e.statuses]
 
     for entity in hidden_entities:
@@ -371,7 +385,7 @@ def execute_move_zone(actor, target_zone):
 
 def execute_attack(actor, target_name):
     """Executes an attack, checking the weapon's range against the target's distance."""
-    all_entities = game_state["players"] + game_state["npcs"]
+    all_entities = game_state["players"] + game_state["actors"]
     target_entity = next((e for e in all_entities if e.name.lower() == target_name.lower()), None)
     
     if not actor: return f"Action failed: Could not find attacker."
@@ -435,7 +449,7 @@ def execute_attack(actor, target_name):
 
 def execute_skill_check(actor, skill_name=None, target_name=None, object_name=None):
     """Performs a general skill check against a target, an object, or a static difficulty."""
-    all_entities = game_state["players"] + game_state["npcs"]
+    all_entities = game_state["players"] + game_state["actors"]
     if not actor: return f"Action failed: Could not find actor for skill check."
     
     actor_room_data = game_state["environment"].get_room(actor.current_room)
@@ -517,10 +531,10 @@ def execute_skill_check(actor, skill_name=None, target_name=None, object_name=No
         if not target_entity: return f"Action failed: Could not find target '{target_name}'."
         # Opposed checks require being in the same zone
         if actor.current_room != target_entity.current_room or actor.current_zone != target_entity.current_zone:
-             return f"Action failed: {target_name} is not in the same zone."
+                return f"Action failed: {target_name} is not in the same zone."
         if not skill_name: return f"Action failed: must specify a skill to use on {target_name}."
         
-        resisting_skill = "Willpower"
+        resisting_skill = "willpower"
         normalized_skill_name = next((k for k in OPPOSED_SKILLS if k.lower() == skill_name.lower()), None)
         if normalized_skill_name and OPPOSED_SKILLS[normalized_skill_name]:
             resisting_skill = OPPOSED_SKILLS[normalized_skill_name][0]
@@ -528,12 +542,11 @@ def execute_skill_check(actor, skill_name=None, target_name=None, object_name=No
         outcome_summary = f"{actor.name} uses {skill_name} against {target_entity.name} (resisted by {resisting_skill})."
         
         resistance_pips = target_entity.get_attribute_or_skill_pips(resisting_skill)
-        resistance_roll, _ = roll_d6_dice(resistance_pips)
-        final_difficulty = resistance_roll
+        final_difficulty, _ = roll_d6_dice(resistance_pips)
         skill_pips = actor.get_attribute_or_skill_pips(skill_name)
         success_level, _, details_str = roll_d6_check(actor, skill_pips, final_difficulty)
         
-        outcome_summary += f"\n  {actor.name}'s roll: {details_str} vs Resistance DN {final_difficulty}."
+        outcome_summary += f"\n  {actor.name}'s roll: {details_str} vs {final_difficulty}."
         return outcome_summary
 
     # Logic for a general skill check against a static difficulty
@@ -549,7 +562,7 @@ def execute_skill_check(actor, skill_name=None, target_name=None, object_name=No
 
 def execute_take_item(actor, source_name, item_name):
     """Takes an item from an object or an incapacitated character."""
-    all_entities = game_state["players"] + game_state["npcs"]
+    all_entities = game_state["players"] + game_state["actors"]
     if not actor: return f"Action failed: Could not find actor to take item."
 
     actor_room_data = game_state["environment"].get_room(actor.current_room)
@@ -583,14 +596,13 @@ def execute_take_item(actor, source_name, item_name):
         if not source_char.is_incapacitated():
             return f"Cannot take from {source_name}; they are not incapacitated."
 
-        source_inventory = source_char.inventory + source_char.equipment
+        source_inventory = source_char.inventory
         item_to_take = next((item for item in source_inventory if item['name'].lower() == item_name.lower()), None)
         if not item_to_take: return f"{source_name} does not have an item named '{item_name}'."
 
         actor.inventory.append(item_to_take)
         try:
             if item_to_take in source_char.inventory: source_char.inventory.remove(item_to_take)
-            if item_to_take in source_char.equipment: source_char.equipment.remove(item_to_take)
         except ValueError: pass
         return f"{actor.name} takes the {item_name} from the incapacitated {source_name}."
 
@@ -604,11 +616,7 @@ def execute_drop_item(actor, item_name):
     if item_to_drop:
         actor.inventory.remove(item_to_drop)
     else:
-        item_to_drop = next((item for item in actor.equipment if item['name'].lower() == item_name.lower()), None)
-        if item_to_drop:
-            actor.equipment.remove(item_to_drop)
-        else:
-            return f"{actor.name} does not have a '{item_name}' to drop."
+        return f"{actor.name} does not have a '{item_name}' to drop."
 
     room_data = game_state["environment"].get_room(actor.current_room)
     if not room_data: return "ERROR: Actor is in an invalid room."
@@ -637,11 +645,14 @@ def execute_equip_item(actor, item_name):
     if not item_to_equip:
         return f"{actor.name} does not have a '{item_name}' in their inventory."
 
+    if item_to_equip.get('equipped'):
+        return f"{actor.name} is already equipping the {item_name}."
+
     item_location = item_to_equip.get("location")
     if not item_location or item_location == "none":
         return f"The '{item_name}' is not something that can be equipped."
 
-    equipped_items_in_location = [item for item in actor.equipment if item.get("location") == item_location]
+    equipped_items_in_location = [item for item in actor.inventory if item.get('equipped') and item.get("location") == item_location]
     
     location_limits = {"head": 1, "chest": 1, "hand": 2} 
     limit = location_limits.get(item_location, 1)
@@ -650,20 +661,18 @@ def execute_equip_item(actor, item_name):
         occupied_by_names = ", ".join([item['name'] for item in equipped_items_in_location])
         return f"Cannot equip '{item_name}'. The '{item_location}' location is already occupied by: {occupied_by_names}. You must unequip an item first."
 
-    actor.inventory.remove(item_to_equip)
-    actor.equipment.append(item_to_equip)
+    item_to_equip['equipped'] = True
     return f"{actor.name} equips the {item_to_equip['name']}."
 
 def execute_unequip_item(actor, item_name):
     """Moves an item from equipment back to inventory."""
     if not actor: return f"Action failed: Could not find actor to unequip item."
 
-    item_to_unequip = next((item for item in actor.equipment if item['name'].lower() == item_name.lower()), None)
+    item_to_unequip = next((item for item in actor.inventory if item['name'].lower() == item_name.lower() and item.get('equipped')), None)
     if not item_to_unequip:
         return f"{actor.name} does not have a '{item_name}' equipped."
 
-    actor.equipment.remove(item_to_unequip)
-    actor.inventory.append(item_to_unequip)
+    item_to_unequip['equipped'] = False
     return f"{actor.name} unequips the {item_to_unequip['name']}."
 
 def pass_turn(actor, reason="", **kwargs):
@@ -724,7 +733,7 @@ def get_llm_action_and_execute(command, actor, is_combat):
     which then chooses an action (a function) to execute.
     """
     actor_room = game_state["environment"].get_room(actor.current_room)
-    other_chars_in_room = [e for e in game_state['players'] + game_state['npcs'] if e.id != actor.id and e.current_room == actor.current_room]
+    other_chars_in_room = [e for e in game_state['players'] + game_state['actors'] if e.id != actor.id and e.current_room == actor.current_room]
     
     current_zone_data = actor_room.get("zones", {}).get(str(actor.current_zone), {})
     adjacent_zones = current_zone_data.get("adjacent_zones", [])
@@ -844,12 +853,12 @@ def get_enemy_action(enemy_actor, is_combat_mode, last_summary):
         # Return an empty string to suppress "sits silently" message
         return ""
 
-    # --- Standard combat logic for hostile npcs ---
+    # --- Standard combat logic for hostile actors ---
     if is_combat_mode and enemy_actor.attitude == ATTITUDE_HOSTILE:
         # Enemy AI is now zone-aware
         players_in_room = [p for p in game_state["players"] if p.current_room == enemy_actor.current_room and not p.is_incapacitated()]
         if not players_in_room:
-             return pass_turn(enemy_actor, reason="All targets have fled or are defeated.")
+                return pass_turn(enemy_actor, reason="All targets have fled or are defeated.")
         
         weapon = enemy_actor.get_weapon_details()
         weapon_range_value = weapon.get("range", 0)
@@ -915,7 +924,7 @@ def get_llm_story_response(mechanical_summary, actor):
     Generates a narrative summary of the events that just occurred.
     """
     actor_room_key = actor.current_room
-    entities_in_room = [e for e in game_state['players'] + game_state['npcs'] if e.current_room == actor_room_key]
+    entities_in_room = [e for e in game_state['players'] + game_state['actors'] if e.current_room == actor_room_key]
     statuses = "\n".join([p.get_status_summary() for p in entities_in_room]) if entities_in_room else "None"
     
     actor_room = game_state["environment"].get_room(actor.current_room)
@@ -944,9 +953,9 @@ def load_scenario(filepath):
     global scenario_data
     try:
         with open(filepath, 'r') as f:
-            scenario_data = json.load(f)
+            scenario_data = yaml.safe_load(f)
             return True
-    except (FileNotFoundError, json.JSONDecodeError) as e:
+    except (FileNotFoundError, yaml.YAMLError) as e:
         print(f"ERROR loading scenario file {filepath}: {e}")
         return False
 
@@ -966,9 +975,9 @@ def setup_initial_encounter():
     for player_config in char_configs.get("players", []):
         sheet = load_character_sheet(os.path.join(characters_dir, player_config["sheet"]))
         if sheet: game_state["players"].append(GameEntity(sheet, player_config["location"]))
-    for enemy_config in char_configs.get("npcs", []):
-        sheet = load_character_sheet(os.path.join(characters_dir, enemy_config["sheet"]))
-        if sheet: game_state["npcs"].append(GameEntity(sheet, enemy_config["location"]))
+    for actor_config in char_configs.get("actors", []):
+        sheet = load_character_sheet(os.path.join(characters_dir, actor_config["sheet"]))
+        if sheet: game_state["actors"].append(GameEntity(sheet, actor_config["location"]))
 
     if not game_state["players"]:
         print("No players loaded. Exiting.")
@@ -985,7 +994,7 @@ def roll_initiative():
     if not player_room: return
     
     # Find all combat participants in the current room
-    participants = [e for e in game_state["players"] + game_state["npcs"] if not e.is_incapacitated() and e.attitude == ATTITUDE_HOSTILE and e.current_room == player_room]
+    participants = [e for e in game_state["players"] + game_state["actors"] if not e.is_incapacitated() and e.current_room == player_room]
     for entity in participants:
         entity.initiative_roll, _ = roll_d6_dice(entity.get_attribute_or_skill_pips("Perception"))
 
@@ -1005,6 +1014,7 @@ class Tee:
 
 def main_game_loop():
     """The main loop that runs the game."""
+    is_interactive = sys.stdout.isatty()
     log_filename = f"game_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     original_stdout = sys.stdout
     with open(log_filename, 'w', encoding='utf-8') as log_file:
@@ -1026,15 +1036,15 @@ def main_game_loop():
 
         is_combat_mode = False
         turn_summaries = []
-        # Initial turn order is just players then npcs
-        game_state["turn_order"] = game_state["players"] + game_state["npcs"]
+        # Initial turn order is just players then actors
+        game_state["turn_order"] = game_state["players"] + game_state["actors"]
         last_active_actor = player
 
         # --- The Game Loop ---
         while True:
             # Check if combat should start or end
             player_room = game_state["players"][0].current_room
-            hostiles_in_room = any(e.attitude == ATTITUDE_HOSTILE and e.current_room == player_room and not e.is_incapacitated() for e in game_state["npcs"])
+            hostiles_in_room = any(e.attitude == ATTITUDE_HOSTILE and e.current_room == player_room and not e.is_incapacitated() for e in game_state["actors"])
             
             # Start combat if it's not already active and there are hostiles
             if not is_combat_mode and hostiles_in_room and any(p.attitude == ATTITUDE_HOSTILE for p in game_state["players"]):
@@ -1052,7 +1062,7 @@ def main_game_loop():
             elif is_combat_mode and not hostiles_in_room:
                 print("\n" + "="*20); print("COMBAT ENDS. No active hostiles present."); print("="*20)
                 is_combat_mode = False
-                game_state["turn_order"] = game_state["players"] + game_state["npcs"]
+                game_state["turn_order"] = game_state["players"] + game_state["actors"]
                 game_state["current_turn_entity_index"] = 0
 
             # --- End of Round Summary ---
@@ -1093,7 +1103,11 @@ def main_game_loop():
             else:
                 # --- Player's Turn ---
                 if current_entity in game_state["players"]:
-                    command = input(f"Your action, {current_entity.name} (in {current_entity.current_room}, Zone {current_entity.current_zone}): ")
+                    if is_interactive:
+                        command = input(f"Your action, {current_entity.name} (in {current_entity.current_room}, Zone {current_entity.current_zone}): ")
+                    else:
+                        print(f"Your action, {current_entity.name} (in {current_entity.current_room}, Zone {current_entity.current_zone}): look")
+                        command = "look"
                     if command.lower() in ["quit", "exit"]:
                         print("Exiting game.")
                         break
@@ -1126,6 +1140,10 @@ def main_game_loop():
 
             # Move to the next character in the turn order
             game_state["current_turn_entity_index"] += 1
+
+            # If not in an interactive terminal, exit after the first turn
+            if not is_interactive:
+                break
 
     # Restore standard output and inform the user where the log file is saved
     sys.stdout = original_stdout

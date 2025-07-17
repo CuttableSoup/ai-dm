@@ -1,0 +1,4 @@
+statuses:
+  drunk:
+    - perception: -3
+    - agility: -3

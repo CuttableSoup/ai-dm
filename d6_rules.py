@@ -2,110 +2,106 @@
 
 import random
 
-# --- D6 System Constants and Rules ---
-
-
-
 # Attitude statistics represent an NPC's disposition towards the players.
-ATTITUDE_HELPFUL = "Helpful"
-ATTITUDE_FRIENDLY = "Friendly"
-ATTITUDE_INDIFFERENT = "Indifferent"
-ATTITUDE_UNFRIENDLY = "Unfriendly"
-ATTITUDE_HOSTILE = "Hostile"
+ATTITUDE_HELPFUL = "helpful"
+ATTITUDE_FRIENDLY = "friendly"
+ATTITUDE_INDIFFERENT = "indifferent"
+ATTITUDE_UNFRIENDLY = "unfriendly"
+ATTITUDE_HOSTILE = "hostile"
 
 # A list of skills that are primarily used for combat and can cause damage.
-COMBAT_SKILLS = ["Melee_Combat", "Brawling", "Firearms", "Missile_Weapons", "Gunnery", "Throwing", "Demolitions"]
+COMBAT_SKILLS = ["melee_combat", "brawling", "firearms", "missile_weapons", "gunnery", "throwing", "demolitions"]
 
 # This dictionary maps each skill to its governing attribute.
 # This is crucial for determining the total number of dice to roll for a skill check.
 D6_SKILLS_BY_ATTRIBUTE = {
-    "Physique": [
-        "Climb_Jump", "Lifting", "Running", "Stamina", "Swim"
+    "physique": [
+        "climb_jump", "lifting", "running", "stamina", "swim"
     ],
-    "Agility": [
-        "Acrobatics", "Brawling", "Dodge", "Flying", "Melee_Combat", "Riding", "Hide"
+    "agility": [
+        "acrobatics", "brawling", "dodge", "flying", "melee_combat", "riding", "hide"
     ],
-    "Coordination": [
-        "Firearms", "Gunnery", "Lockpicking", "Missile_Weapons", "Piloting", "Sleight_of_Hand", "Throwing", "Vehicle_Operation"
+    "coordination": [
+        "firearms", "gunnery", "lockpicking", "missile_weapons", "piloting", "sleight_of_hand", "throwing", "vehicle_operation"
     ],
-    "Intellect": [
-        "Aliens", "Astrography", "Bureaucracy", "Business", "Cultures", "Demolitions", "Languages",
-        "Medicine", "Navigation", "Scholar", "Security", "Tactics", "Technology"
+    "intellect": [
+        "aliens", "astrography", "bureaucracy", "business", "cultures", "demolitions", "languages",
+        "medicine", "navigation", "scholar", "security", "tactics", "technology"
     ],
-    "Perception": [
-        "Artist", "Forgery", "Gambling", "Investigation", "Know_How", "Repair_Crafting", "Search", "Streetwise", "Survival", "Tracking"
+    "perception": [
+        "artist", "forgery", "gambling", "investigation", "know_how", "repair_crafting", "search", "streetwise", "survival", "tracking"
     ],
-    "Presence": [
-        "Animal_Handling", "Charm", "Command", "Con", "Disguise", "Intimidation", "Persuasion", "Willpower"
+    "presence": [
+        "animal_handling", "charm", "command", "con", "disguise", "intimidation", "persuasion", "willpower"
     ],
 }
 
 # This dictionary defines which skills can be used to oppose another skill check.
 OPPOSED_SKILLS = {
     # --- Agility Skills ---
-    "Brawling": ["Brawling", "Dodge"],
-    "Melee_Combat": ["Melee_Combat", "Dodge"],
+    "brawling": ["brawling", "dodge"],
+    "mlee_combat": ["melee_combat", "dodge"],
     # --- Coordination Skills ---
-    "Firearms": ["Dodge"],
-    "Gunnery": ["Dodge"],
-    "Missile_Weapons": ["Dodge"],
-    "Sleight_of_Hand": ["Search"],
-    "Throwing": ["Dodge", "Throwing"],
+    "firearms": ["dodge"],
+    "gGunnery": ["dodge"],
+    "missile_weapons": ["dodge"],
+    "sSleight_of_hand": ["search"],
+    "throwing": ["dodge", "throwing"],
     # --- Intellect Skills ---
-    "Security": ["Security", "Technology"],
+    "security": ["security", "technology"],
     # --- Perception Skills ---
-    "Forgery": ["Forgery", "Investigation"],
-    "Hide": ["Search", "Investigation", "Tracking"],
+    "forgery": ["forgery", "investigation"],
+    "hide": ["search", "investigation", "tracking"],
     # --- Presence Skills ---
-    "Charm": ["Willpower"],
-    "Con": ["Willpower", "Investigation", "Streetwise"],
-    "Intimidation": ["Willpower"],
-    "Persuasion": ["Willpower", "Con"],
+    "charm": ["willpower"],
+    "con": ["willpower", "investigation", "streetwise"],
+    "Intimidation": ["willpower"],
+    "persuasion": ["willpower", "con"],
 }
 
 # Provides descriptive words for different levels of an attribute score.
 ATTRIBUTE_DESCRIPTORS = {
-    "Physique": {
-            1: "Frail",
-            2: "Weak",
-            3: "Standard",
-            4: "Strong",
-            5: "Herculean"
+    "physique": {
+            1: "frail",
+            2: "weak",
+            3: "standard",
+            4: "strong",
+            5: "herculean"
         },
-    "Agility": {
-            1: "Clumsy",
-            2: "Awkward",
-            3: "Ordinary",
-            4: "Agile",
-            5: "Nimble"
+    "agility": {
+            1: "clumsy",
+            2: "awkward",
+            3: "ordinary",
+            4: "agile",
+            5: "nimble"
         },
-    "Coordination": {
-            1: "Uncoordinated",
-            2: "Clumsy",
-            3: "Typical",
-            4: "Coordinated",
-            5: "Precise"
+    "coordination": {
+            1: "uncoordinated",
+            2: "clumsy",
+            3: "typical",
+            4: "coordinated",
+            5: "precise"
         },
-    "Intellect": {
-            1: "Stupid",
-            2: "Unintelligent",
-            3: "Normal",
-            4: "Intelligent",
-            5: "Genius"
+    "intellect": {
+            1: "stupid",
+            2: "unintelligent",
+            3: "normal",
+            4: "intelligent",
+            5: "genius"
         },
-    "Perception": {
-            1: "Oblivious",
-            2: "Unobservant",
-            3: "Fair",
-            4: "Perceptive",
-            5: "Insightful"
+    "perception": {
+            1: "oblivious",
+            2: "unobservant",
+            3: "fair",
+            4: "perceptive",
+            5: "insightful"
         },
-    "Presence": {
-            1: "Uncharismatic",
-            2: "Shy",
-            3: "Unremarkable",
-            4: "Charismatic",
-            5: "Commanding"
+    "presence": {
+            1: "uncharismatic",
+            2: "shy",
+            3: "unremarkable",
+            4: "charismatic",
+            5: "commanding"
         }
 }
 

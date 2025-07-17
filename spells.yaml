@@ -1,0 +1,52 @@
+- Hold Person:
+    description: restrains one target
+    difficulty: 10
+    duration: 3
+    effect: stun
+    target: single
+    increment: second
+    location:
+    - hand
+    - mouth
+    range: medium
+    skill: spellcasting
+    value: 0
+- Fireball:
+    description: burst of fire
+    difficulty: 10
+    duration: 0
+    effect: fire
+    target: area
+    increment: instant
+    location:
+    - hand
+    - mouth
+    range: long
+    skill: spellcasting
+    value: 12
+- Charm:
+    description: charms one target
+    difficulty: 10
+    duration: 9
+    effect: charm
+    target: single
+    increment: minute
+    location:
+    - hand
+    - mouth
+    range: medium
+    skill: spellcasting
+    value: 0
+- Comprehend Languages:
+    description: adds a language of choice
+    difficulty: 10
+    duration: 9
+    effect: language
+    target: single
+    increment: minute
+    location:
+    - hand
+    - mouth
+    range: melee
+    skill: spellcasting
+    value: 0

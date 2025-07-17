@@ -1,0 +1,69 @@
+scenario_name: "Arena Combat"
+
+environment:
+  rooms:
+    arena:
+      name: "The Arena"
+      description: "A circular sand-covered arena surrounded by high stone walls. There are no obvious exits."
+      zones:
+        1:
+          name: "Center Circle"
+          description: "The very middle of the arena."
+          adjacent_zones: [2, 3, 4, 5]
+        2:
+          name: "Northern Arc"
+          description: "The northern edge of the arena."
+          adjacent_zones: [1]
+        3:
+          name: "Eastern Arc"
+          description: "The eastern edge of the arena."
+          adjacent_zones: [1]
+        4:
+          name: "Southern Arc"
+          description: "The southern edge of the arena."
+          adjacent_zones: [1]
+        5:
+          name: "Western Arc"
+          description: "The western edge of the arena."
+          adjacent_zones: [1]
+      objects:
+        - name: "Treasure Chest"
+          zone: 1
+          description: "A sturdy wooden chest with a metal lock."
+          action:
+            skill: "lockpicking"
+            difficulty: 10
+            success_text: "With a satisfying click, the lock springs open."
+            failure_text: "The lock is tricky and resists your attempts."
+            inventory:
+              - name: "50 Gold Pieces"
+                type: "treasure"
+              - name: "Scroll of Victory"
+                type: "item"
+                description: "A rolled-up piece of parchment that reads: YOU WIN!"
+      exits: []
+
+characters:
+  players:
+    - sheet: "player.yaml"
+      location:
+        room: "arena"
+        zone: 1
+  actors:
+    - sheet: "orc.yaml"
+      location:
+        room: "arena"
+        zone: 3
+
+prompts:
+  npc_dialogue: >
+    You are {actor_description}. The current situation is: {context}. 
+    Based on your personality and goals, what do you say or do? 
+    If you are hostile, you will attack. If you are not, you might talk.
+    Describe your action as a function call.
+  narrative_summary: >
+    The character {actor_name} is in the {room_name} ({room_description}).
+    The following just happened: {mechanical_summary}.
+    Describe these events in a compelling, narrative style.
+    Current statuses of characters in the room are:
+    {statuses}

@@ -1,0 +1,186 @@
+characters:
+  actors:
+  - location:
+      room: inner_sanctum
+      zone: 2
+    sheet: d6_orc.json
+  - location:
+      room: shrine_clearing
+      zone: 2
+    sheet: d6_trap.json
+  - location:
+      room: antechamber
+      zone: 2
+    sheet: d6_trap.json
+  players:
+  - location:
+      room: shrine_clearing
+      zone: 1
+    sheet: d6_warrior.json
+environment:
+  rooms:
+    antechamber:
+      description: A damp, stone antechamber. The floor is dusty. A large, iron-bound
+        wooden door stands to the north.
+      exits:
+      - description: The way out to the south.
+        name: Clearing
+        to_room: shrine_clearing
+        zone: 1
+      - action:
+          difficulty: 8
+          skill: Lifting
+          success_text: You shove the heavy door open.
+        description: A heavy door to the north.
+        name: Iron-bound Door
+        to_room: inner_sanctum
+        zone: 3
+      name: Antechamber
+      objects:
+      - action:
+          difficulty: 12
+          skill: Tracking
+          success_text: You notice faint, heavy tracks leading towards the northern
+            door. Orc tracks.
+        description: The floor is covered in thick dust.
+        name: Dusty Floor
+        zone: 1
+      zones:
+        '1':
+          adjacent_zones:
+          - 2
+          description: Just inside the archway from the clearing.
+          name: Entrance
+        '2':
+          adjacent_zones:
+          - 1
+          - 3
+          description: The center of the antechamber. The floor is strangely clean
+            here.
+          name: Center
+        '3':
+          adjacent_zones:
+          - 2
+          description: Before a large iron-bound door.
+          name: North Door
+    inner_sanctum:
+      description: This circular chamber houses a large, ominous-looking altar. The
+        air is thick with dread.
+      exits:
+      - description: The way out to the south.
+        name: Antechamber Door
+        to_room: antechamber
+        zone: 1
+      name: Inner Sanctum
+      objects:
+      - action:
+          difficulty: 15
+          inventory:
+          - description: A bottle of luminous blue fluid.
+            name: Potion of Healing
+            type: consumable
+          skill: Investigation
+          success_text: You discover hidden compartments containing a potion.
+        description: It feels cold to the touch.
+        name: Ominous Altar
+        zone: 2
+      zones:
+        '1':
+          adjacent_zones:
+          - 2
+          description: By the door leading from the antechamber.
+          name: Entrance
+        '2':
+          adjacent_zones:
+          - 1
+          description: A large stone altar stained with old, dark patches.
+          name: Altar
+    shrine_clearing:
+      description: A mossy clearing in an ancient forest, littered with crumbling
+        stones. A chill hangs in the air. A dark stone archway is visible to the north.
+      exits:
+      - description: A dark archway leading north.
+        name: Stone Archway
+        to_room: antechamber
+        zone: 3
+      name: Shrine Clearing
+      objects:
+      - action:
+          difficulty: 10
+          inventory:
+          - description: currency
+            name: Gold coins
+            type: treasure
+            value: 10
+          skill: Search
+          success_text: Under a large stone, you find a small, forgotten leather pouch.
+        description: Piles of moss-covered stones.
+        name: Crumbling Stones
+        zone: 2
+      zones:
+        '1':
+          adjacent_zones:
+          - 2
+          description: The southern edge of the clearing, where the forest is thickest.
+          name: Forest Edge
+        '2':
+          adjacent_zones:
+          - 1
+          - 3
+          description: The middle of the clearing, littered with stones.
+          name: Center Clearing
+        '3':
+          adjacent_zones:
+          - 2
+          description: The northern part of the clearing, right before a stone archway.
+          name: Shrine Entrance
+  starting_room: shrine_clearing
+prompts:
+  combat: 'You are in combat in the {room_name} ({room_description}).
+
+    Your status: {actor_description}.
+
+    You are in Zone {actor_zone}. You can move to adjacent Zone(s): {adjacent_zones}.
+
+    Scene Status: Characters: {character_locations}. Objects: {object_locations}.
+
+    Your command is: ''{command}''. Based on the situation, choose the best function.'
+  narrative_summary: 'You are a Game Master narrating a story.
+
+
+    Context:
+
+    - Actor: {actor_name}.
+
+    - Location: {room_name} ({room_description}).
+
+    - Room Statuses:
+
+    {statuses}
+
+    - Mechanical Outcome:
+
+    ---
+
+    {mechanical_summary}
+
+    ---
+
+
+    Your Task: Write a 2-3 sentence narrative description of what just happened in
+    the third person. ONLY describe what could be perceived from within the room.'
+  non_combat: 'You are in the {room_name} ({room_description}).
+
+    Your status: {actor_description}.
+
+    You are in Zone {actor_zone}. You can move to adjacent Zone(s): {adjacent_zones}.
+
+    Scene Status: Characters: {character_locations}. Objects: {object_locations}.
+
+    Your command is: ''{command}''. Based on the situation, choose the best function.'
+  npc_dialogue: 'You are roleplaying as an NPC. Your status: {actor_description}.
+    The last thing that happened was: {context}
+
+    Based on your personality, traits, and the situation, write a single, compelling
+    line of dialogue. Do not add quotes.'
+scenario_name: The Forgotten Shrine
