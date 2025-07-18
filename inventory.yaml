@@ -1,94 +1,105 @@
-chainmail:
-    description: oiled chain
-    effect: physical
-    target: single
-    location: chest
-    range: none
-    skill: none
-    type: armor
-    value: 3
-fists:
-    description: calloused knuckles
-    effect: physical
-    target: single
-    location: hand
-    range: melee
-    skill: Brawling
-    type: Weapon
-    value: 3
-gold coins:
-    description: currency
-    type: treasure
-    value: 20
-gun:
-    description: revolver
-    effect: physical
-    target: single
-    location: hand
-    magazine: 6
-    range: short
-    skill: Firearms
-    type: Weapon
-    value: 4
-headband of intellect:
-    description: golden plain band
-    effect: intellect
-    target: single
-    location: head
-    range: melee
-    skill: none
-    type: wonderous
-    value: 3
-longsword:
-    description: gleaming steel
-    effect: physical
-    target: single
-    location: hand
-    range: melee
-    skill: Melee_Combat
-    type: Weapon
-    value: 3
-potion of healing:
-    description: glass bottle of luminous blue fluid
-    effect: heal
-    target: single
-    location: hand
-    range: melee
-    skill: none
-    type: consumable
-    value: 3
-spikes:
-    description: rusty
-    effect: physical
-    target: single
-    location: hand
-    range: melee
-    skill: Brawling
-    type: Weapon
-    value: 3
-steel shield:
-    description: battered shield
-    effect: physical
-    target: single
-    location: hand
-    range: none
-    skill: none
-    type: armor
-    value: 3
-bullets:
-    description: revolver ammunition
-    effect: none
-    location: hand
-    range: none
-    skill: none
-    type: ammunition
-    value: 0
-hide:
-    description: tanned leather
-    effect: physical
-    target: single
-    location: chest
-    range: none
-    skill: none
-    type: armor
-    value: 3
+items: 
+- name: chainmail
+  description: oiled chain
+  effect: physical
+  target: 1
+  location: chest
+  range: none
+  skill: none
+  type: armor
+  weight: 10
+  value: 3
+- name: fists
+  description: calloused knuckles
+  effect: physical
+  target: 1
+  location: hand
+  range: 0
+  skill: brawling
+  weight: 0
+  type: weapon
+  value: 3
+- name: gold coins
+  description: currency
+  type: treasure
+  weight: 0.05
+- name: gun
+  description: revolver
+  effect: physical
+  target: 1
+  location: hand
+  magazine: 6
+  range: 1
+  skill: Firearms
+  type: Weapon
+  weight: 3
+  value: 4
+- name: headband of intellect
+  description: golden plain band
+  effect: intellect
+  target: 1
+  location: head
+  range: melee
+  skill: none
+  type: wonderous
+  weight: 1
+  value: 3
+- name: longsword
+  description: gleaming steel
+  effect: physical
+  target: 1
+  location: hand
+  range: melee
+  skill: Melee_Combat
+  type: Weapon
+  weight: 5
+  value: 3
+- name: potion of healing
+  description: glass bottle of luminous blue fluid
+  effect: heal
+  target: 1
+  location: hand
+  range: melee
+  skill: none
+  type: consumable
+  weight: 0.5
+  value: 3
+- name: spikes
+  description: rusty
+  effect: physical
+  target: 1
+  location: hand
+  range: melee
+  skill: Brawling
+  type: Weapon
+  weight: 10
+  value: 3
+- name: steel shield
+  description: battered shield
+  effect: physical
+  target: 1
+  location: hand
+  range: none
+  skill: none
+  type: armor
+  weight: 5
+  value: 3
+- name: bullets
+  description: revolver ammunition
+  effect: none
+  location: hand
+  range: none
+  skill: none
+  type: ammunition
+  weight: 0.01
+  value: 0
+- name: hide
+  description: tanned leather
+  effect: physical
+  target: 1
+  location: chest
+  range: none
+  skill: none
+  type: armor
+  weight: 15
+  value: 3

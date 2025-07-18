@@ -1,48 +1,50 @@
+name: Grog
+max_hp: 30
+cur_hp: 30
+exp: 50
+
+attributes:
+  agility: 9
+  coordination: 9
+  intellect: 9
+  perception: 9
+  physique: 9
+  presence: 9
+
 allies: none
 attitudes:
-- default: indifferent
-attributes:
-  agility: 2
-  coordination: 2
-  intellect: 6
-  perception: 3
-  physique: 12
-  presence: 3
-current_hitpoints: 30
-inventory:
-- fists:
-  quantity: 2
-  equipped: true
-- hide:
-  quantity: 1
-  equipped: true
-experience: 0
-hitpoints: 30
-id: npc
-inventory:
-- Gold coins
+- default: unfriendly
+- valerius: indifferent
+statuses:
+- drunk
+personality:
+- greedy
+- gullible
 languages:
 - orc
-memories:
-- Valerius is a fellow warrior met on the battlefield, took Grog's eye in combat
-name: Grog
-personality:
-- selfish
-- gullible
+
 qualities:
-  body: scarred
-  eyes: black, missing one
+  body: heavily scarred
+  eyes: black, one eye missing
   gender: male
   hair: none
-  height: 108
-  movitations: greed
-  occupation: barbarian
+  height: 84
+  occupation: adventurer
   race: orc
   religion: none
   skin: green
   weight: 300
+
 skills:
-  brawling: 6
-  dodge: 0
-statuses:
-- drunk
+  dodge: 3
+  brawling: 3
+
+inventory:
+- item: fists
+  quantity: 2
+  equipped: true
+- item: hide
+  quantity: 1
+  equipped: true
+
+memories: faced Valerius in combat before, took his left eye

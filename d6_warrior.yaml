@@ -1,64 +1,71 @@
+name: Valerius
+max_hp: 30
+cur_hp: 30
+exp: 50
+
+attributes:
+  agility: 9
+  coordination: 9
+  intellect: 9
+  perception: 9
+  physique: 9
+  presence: 9
+
 allies: none
 attitudes:
 - default: Indifferent
-attributes:
-    agility: 9
-    coordination: 9
-    intellect: 9
-    perception: 9
-    physique: 9
-    presence: 9
-current_hitpoints: 30
-inventory:
-- longsword:
-    quantity: 1
-    equipped: true
-- chainmail:
-    quantity: 1
-    equipped: true
-- steel shield:
-    quantity: 1
-    equipped: true
-- headband of intellect:
-    quantity: 1
-    equipped: true
-- gun:
-    quantity: 1
-- potion of healing:
-    quantity: 1
-- bullets:
-    quantity: 6
-experience: 50
-hitpoints: 30
-id: player
+statuses:
+- none
+personality:
+- none
 languages:
 - common
 - elven
 - dwarven
-name: Valerius
-personality:
-- none
+
 qualities:
-    body: lightly scarred
-    eyes: brown
-    gender: male
-    hair: brown
-    height: 72
-    occupation: adventurer
-    race: human
-    religion: none
-    skin: tan
-    weight: 180
+  body: lightly scarred
+  eyes: brown
+  gender: male
+  hair: brown
+  height: 72
+  occupation: adventurer
+  race: human
+  religion: none
+  skin: tan
+  weight: 180
+
 skills:
-    dodge: 3
-    firearms: 3
-    melee_combat: 3
-    search: 3
-    spellcating: 3
+  dodge: 3
+  firearms: 3
+  melee_combat: 3
+  search: 3
+  spellcating: 3
+
+inventory:
+- item: longsword
+  quantity: 1
+  equipped: true
+- item: chainmail
+  quantity: 1
+  equipped: true
+- item: steel shield
+  quantity: 1
+  equipped: true
+- item: headband of intellect
+  quantity: 1
+  equipped: true
+- item: gun
+  quantity: 1
+- item: potion of healing
+  quantity: 1
+- item: bullets
+  quantity: 6
+
 spells:
 - hold Person
 - fireball
 - charm
-- comprhend languages
-statuses:
-- none
+- comprehend languages
+
+memories:
