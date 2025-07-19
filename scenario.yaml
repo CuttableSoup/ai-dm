@@ -1,56 +1,84 @@
 scenario_name: The Forgotten Shrine
 players:
-- sheet: d6_warrior.json
-  location:
-    room: shrine_clearing
-    zone: 1
+  - sheet: d6_warrior.json
+    location:
+      room_id: room_1
+      zone: 1
 actors:
-- sheet: d6_orc.json
-  location:
-    room: inner_sanctum
-    zone: 1
+  - sheet: d6_orc.json
+    location:
+      room_id: room_2
+      zone: 1
 environment:
-  rooms:
-    shrine_clearing:
-      description: A damp, stone antechamber.
-      exits:
-      - name: Wooden Door
-        description: The way out to the north.
-        zone: 1
-      - actions:
-          - skill: lifting
-            difficulty: 10
-          - skill: lockpicking
-            difficulty: 10
-        to_room: inner_sanctum
-        zone: 1
-      objects:
-      - name: Dusty Floor
-        description: The floor is covered in thick dust.
-        actions:
-          difficulty: 12
-          skill: Tracking
-        zone: 1
-    inner_sanctum:
-      description: A damp, inner sanctum.
-      exits:
-      - name: Wooden Door
-        description: The way out to the south.
-        zone: 1
-      - actions:
-          - skill: lifting
-            difficulty: 10
-          - skill: lockpicking
-            difficulty: 10
-        to_room: shrine_clearing
-        zone: 1
-      objects:
-      - name: Chest
-        description: A wooden chest
-        actions:
+  doors:
+    - door_id: wooden_door_shrine
+      name: Wooden Door
+      status: locked
+      description: A sturdy wooden door, leading deeper into the shrine.
+      actions:
+        - skill: lifting
+          difficulty: 10
+          pass: open
+          fail: nothing
         - skill: lockpicking
           difficulty: 10
-        inventory:
-        - item: gold
-          quantity: 50
-        zone: 1
+          pass: open
+          fail: jam
+  rooms:
+    - name: Shrine Clearing
+      room_id: room_1
+      zones:
+      - zone: 1
+        description: A damp, stone clearing.
+        objects:
+          - name: Dusty Floor
+            description: The floor is covered in thick dust.
+            actions:
+              - skill: tracking
+                difficulty: 10
+                pass: "You find footprints, you recognize them as orc tracks."
+                fail: nothing
+      - zone: 2
+        description: A damp, stone clearing.
+        trap:
+          name: spike trap
+          status: armed
+          known: Grog
+          attack: 9
+          damage: 9
+          effect: physical
+          actions:
+            - skill: search
+              difficulty: 10
+              pass: known
+              fail: attack
+            - skill: disable device
+              difficulty: 10
+              pass: disarm
+              fail: attack
+        exits:
+          - door_ref: wooden_door_shrine # Reference the door by its ID
+            to_room: room_2
+            to_zone: 1
+            description: The way out to the north. # You can add a specific description here if needed for this exit
+
+    - name: Inner Sanctum
+      room_id: room_2
+      description: A damp, inner sanctum.
+      exits:
+        - door_ref: wooden_door_shrine # Reference the same door by its ID
+          to_room: room_1
+          to_zone: 1
+          description: The way out to the south. # And here for the other side
+      objects:
+        - name: Chest
+          description: A wooden chest
+          actions:
+            - skill: lockpicking
+              difficulty: 10
+              pass: open
+              fail: jam
+          inventory:
+            - item: gold
+              quantity: 50
+          zone: 1
