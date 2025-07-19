@@ -57,28 +57,30 @@ environment:
               pass: disarm
               fail: attack
         exits:
-          - door_ref: wooden_door_shrine # Reference the door by its ID
+          - door_ref: wooden_door_shrine
             to_room: room_2
             to_zone: 1
-            description: The way out to the north. # You can add a specific description here if needed for this exit
+            description: The way out to the north.
 
     - name: Inner Sanctum
       room_id: room_2
       description: A damp, inner sanctum.
+      zones:
+      - zone: 1
+        description: The dimly lit central chamber of the sanctum.
+        objects:
+          - name: Chest
+            description: A wooden chest
+            actions:
+              - skill: lockpicking
+                difficulty: 10
+                pass: open
+                fail: jam
+            inventory:
+              - item: gold
+                quantity: 50
       exits:
-        - door_ref: wooden_door_shrine # Reference the same door by its ID
+        - door_ref: wooden_door_shrine
           to_room: room_1
           to_zone: 1
-          description: The way out to the south. # And here for the other side
-      objects:
-        - name: Chest
-          description: A wooden chest
-          actions:
-            - skill: lockpicking
-              difficulty: 10
-              pass: open
-              fail: jam
-          inventory:
-            - item: gold
-              quantity: 50
-          zone: 1
+          description: The way out to the south.

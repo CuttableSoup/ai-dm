@@ -47,4 +47,6 @@ inventory:
   quantity: 1
   equipped: true
 
-memories: faced Valerius in combat before, took his left eye
+memories:
+- "faced Valerius in combat before, took his left eye"
+- "charged with protecting the chest"
