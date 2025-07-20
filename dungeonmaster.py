@@ -549,7 +549,7 @@ class Tee:
 
 def main_game_loop():
     """The main loop that runs the game."""
-    log_file_name = datetime.now().strftime("game_log_%Y%m%d_%H%M%S.txt")
+    log_file_name = datetime.now().strftime("game_log_%Y%m%d_%H%M%S.log")
     
     # Check if the 'logs' directory exists, create if not
     log_dir = 'logs'
