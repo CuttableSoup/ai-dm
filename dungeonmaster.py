@@ -9,6 +9,7 @@ MODEL = "local-model/gemma-3-4b"  # Model used for deciding character actions
 LLM_API_URL = "http://localhost:1234/v1/chat/completions" # Local server URL
 SCENARIO_FILE = "scenario.yaml"   # The file containing the game's story and setup
 INVENTORY_FILE = "inventory.yaml" # The file containing all possible items
+DEBUG = False
 
 # Global game state variables (will be populated by setup_initial_encounter)
 scenario_data = {}
@@ -506,7 +507,7 @@ def setup_initial_encounter():
             print(f"Warning: Could not load player character sheet: {sheet_path}")
 
     # Setup NPCs/Actors
-    for actor_data in scenario_data.get('actors', []):
+    for actor_data in scenario_data.get('actors') or []:
         sheet_path = actor_data['sheet']
         char_sheet = load_character_sheet(sheet_path)
         if char_sheet:
@@ -570,17 +571,18 @@ def main_game_loop():
             sys.stdout = original_stdout # Restore stdout before exiting
             return
 
-        print("\n--- Initial Encounter Details ---")
-        for player in players:
-            current_room, current_zone = environment.get_current_room_data(player.location)
-            print(f"Player: {player.name} is in {current_room['name']} (Zone {player.location['zone']}). HP: {player.cur_hp}/{player.max_hp}")
-            if current_zone:
-                print(f"  Zone Description: {current_zone['description']}")
-                if 'objects' in current_zone and current_zone['objects']:
-                    print(f"  Objects in Zone: {[obj['name'] for obj in current_zone['objects']]}")
-                if 'trap' in current_zone:
-                    print(f"  There's a {current_zone['trap']['name']} here.")
-            print(f"  Inventory: {[{item['item']: item['quantity']} for item in player.inventory]}")
+        if DEBUG:
+            print("\n--- Initial Encounter Details ---")
+            for player in players:
+                current_room, current_zone = environment.get_current_room_data(player.location)
+                print(f"Player: {player.name} is in {current_room['name']} (Zone {player.location['zone']}). HP: {player.cur_hp}/{player.max_hp}")
+                if current_zone:
+                    print(f"  Zone Description: {current_zone['description']}")
+                    if 'objects' in current_zone and current_zone['objects']:
+                        print(f"  Objects in Zone: {[obj['name'] for obj in current_zone['objects']]}")
+                    if 'trap' in current_zone:
+                        print(f"  There's a {current_zone['trap']['name']} here.")
+                print(f"  Inventory: {[{item['item']: item['quantity']} for item in player.inventory]}")
         
         for actor_npc in actors:
             current_room, current_zone = environment.get_current_room_data(actor_npc.location)
@@ -593,44 +595,51 @@ def main_game_loop():
 
         # Roll initiative to determine turn order
         turn_order = roll_initiative()
-        print("\n--- Initiative Order ---")
-        for i, combatant in enumerate(turn_order):
-            print(f"{i+1}. {combatant.name} (HP: {combatant.cur_hp}/{combatant.max_hp})")
+        if DEBUG:
+            print("\n--- Initiative Order ---")
+            for i, combatant in enumerate(turn_order):
+                print(f"{i+1}. {combatant.name} (HP: {combatant.cur_hp}/{combatant.max_hp})")
 
         while game_active:
             turn_count += 1
-            print(f"\n--- Turn {turn_count} ---")
+            
+            if DEBUG:
+                print(f"\n--- Turn {turn_count} ---")
 
             for current_character in turn_order:
                 if current_character.cur_hp <= 0:
                     print(f"{current_character.name} is unconscious and cannot act.")
                     continue
-
-                print(f"\n{current_character.name}'s turn.")
+                
+                if DEBUG:
+                    print(f"\n{current_character.name}'s turn.")
                 current_room, current_zone_data = environment.get_current_room_data(current_character.location)
                 
                 if not current_room:
                     print(f"{current_character.name} is in an unknown location. Skipping turn.")
                     continue
-
-                print(f"Location: {current_room['name']} (Zone {current_character.location['zone']}) - {current_zone_data['description']}")
                 
-                # List objects in the current zone
-                objects_in_current_zone = current_zone_data.get('objects', [])
-                if objects_in_current_zone:
-                    print(f"Objects nearby: {[obj['name'] for obj in objects_in_current_zone]}")
+                if DEBUG:
+                    print(f"Location: {current_room['name']} (Zone {current_character.location['zone']}) - {current_zone_data['description']}")
                 
-                # Check for armed traps in the current zone
-                current_trap = environment.get_trap_in_room(current_character.location['room_id'], current_character.location['zone'])
-                if current_trap and current_trap['status'] == 'armed' and current_trap.get('known') != current_character.name:
-                    print(f"WARNING: An unknown trap is armed in this zone! ({current_trap['name']})")
-                elif current_trap and current_trap['status'] == 'armed' and current_trap.get('known') == current_character.name:
-                    print(f"You know there is an armed {current_trap['name']} here.")
+                if DEBUG:
+                    # List objects in the current zone
+                    objects_in_current_zone = current_zone_data.get('objects', [])
+                    if objects_in_current_zone:
+                        print(f"Objects nearby: {[obj['name'] for obj in objects_in_current_zone]}")
+                
+                if DEBUG:
+                    # Check for armed traps in the current zone
+                    current_trap = environment.get_trap_in_room(current_character.location['room_id'], current_character.location['zone'])
+                    if current_trap and current_trap['status'] == 'armed' and current_trap.get('known') != current_character.name:
+                        print(f"WARNING: An unknown trap is armed in this zone! ({current_trap['name']})")
+                    elif current_trap and current_trap['status'] == 'armed' and current_trap.get('known') == current_character.name:
+                        print(f"You know there is an armed {current_trap['name']} here.")
 
 
                 # Player turn
                 if current_character.is_player:
-                    player_input = input(f"What will {current_character.name} do? (e.g., 'search dusty floor', 'lift wooden door', 'quit'): ").strip().lower()
+                    player_input = input(f"{current_character.name}, your action > ").strip().lower()
                     if player_input == 'quit':
                         game_active = False
                         print("Exiting game.")
