@@ -11,7 +11,7 @@ attributes:
   physique: 9
   presence: 9
 
-allies: none
+allies: Kael
 attitudes:
 - default: Indifferent
 statuses:
@@ -40,7 +40,7 @@ skills:
   firearms: 3
   melee_combat: 3
   search: 3
-  spellcating: 3
+  spellcasting: 3
 
 inventory:
 - item: longsword

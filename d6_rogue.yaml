@@ -1,0 +1,66 @@
+name: Kael
+max_hp: 25
+cur_hp: 25
+exp: 50
+
+attributes:
+  agility: 11
+  coordination: 10
+  intellect: 9
+  perception: 10
+  physique: 8
+  presence: 9
+
+allies: Valerius
+attitudes:
+  - default: indifferent
+statuses:
+  - none
+personality:
+  - mischievous
+  - cautious
+languages:
+  - common
+  - thieves' cant
+  - orc
+
+qualities:
+  body: lithe
+  eyes: green
+  gender: female
+  hair: black
+  height: 68
+  occupation: rogue
+  race: half-elf
+  religion: none
+  skin: fair
+  weight: 150
+
+skills:
+  stealth: 4
+  lockpicking: 4
+  sleight_of_hand: 3
+  acrobatics: 3
+  con: 3
+  spellcasting: 3
+
+inventory:
+  - item: short sword
+    quantity: 1
+    equipped: true
+  - item: leather armor
+    quantity: 1
+    equipped: true
+  - item: lockpicks
+    quantity: 1
+  - item: daggers
+    quantity: 3
+  - item: potion of invisibility
+    quantity: 1
+
+spells:
+  - minor illusion
+  - true strike
+  - disguise self
+
+memories:

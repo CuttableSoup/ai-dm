@@ -3,13 +3,14 @@ import json
 import yaml
 import os
 from datetime import datetime
+from collections import deque # For the GameHistory class
 from d6_rules import *
 
 MODEL = "local-model/gemma-3-4b"  # Model used for deciding character actions
 LLM_API_URL = "http://localhost:1234/v1/chat/completions" # Local server URL
 SCENARIO_FILE = "scenario.yaml"   # The file containing the game's story and setup
 INVENTORY_FILE = "inventory.yaml" # The file containing all possible items
-DEBUG = False
+DEBUG = True
 
 # Global game state variables (will be populated by setup_initial_encounter)
 scenario_data = {}
@@ -17,6 +18,7 @@ all_items = {}
 players = []
 actors = []
 environment = None # Will be an instance of the Environment class
+game_history = None # Will be an instance of the GameHistory class
 
 # --- 1. Character Sheet Loading Utility ---
 def load_character_sheet(filepath):
@@ -96,12 +98,8 @@ class Actor:
     """Represents an actor in the game."""
     def __init__(self, character_sheet_data, location):
         self.source_data = character_sheet_data
-        self.name = character_sheet_data.get('name', 'Unknown Actor')
-        self.max_hp = character_sheet_data.get('max_hp', 10)
-        self.cur_hp = character_sheet_data.get('cur_hp', self.max_hp)
-        self.attributes = character_sheet_data.get('attributes', {})
-        self.skills = character_sheet_data.get('skills', {})
-        self.inventory = character_sheet_data.get('inventory', [])
+        for key, value in character_sheet_data.items():
+            setattr(self, key, value)
         self.location = location # {'room_id': 'room_1', 'zone': 1}
         self.is_player = False # Default, can be overridden for players
 
@@ -111,15 +109,15 @@ class Actor:
         
         # Check if it's an attribute
         if trait_name in self.attributes:
-            return self.attributes[trait_name] * 3 # Attributes are typically multiplied by 3 for pips
+            return self.attributes[trait_name]
 
         # Check if it's a skill
         if trait_name in self.skills:
-            skill_pips = self.skills[trait_name] * 3
+            skill_pips = self.skills[trait_name]
             # Add attribute pips for the governing attribute of the skill
             for attr, skill_list in D6_SKILLS_BY_ATTRIBUTE.items():
                 if trait_name in skill_list:
-                    return skill_pips + (self.attributes.get(attr, 0) * 3)
+                    return skill_pips + (self.attributes.get(attr, 0))
             return skill_pips # If skill found but no governing attribute specified/found
 
         return 0 # Trait not found
@@ -135,6 +133,25 @@ class Actor:
         if self.cur_hp > self.max_hp:
             self.cur_hp = self.max_hp
         return f"{self.name} healed {healing} HP and now has {self.cur_hp} HP."
+
+class GameHistory:
+    """Records the past few actions and dialogues in the game."""
+    def __init__(self, max_entries=5):
+        self.history = deque(maxlen=max_entries)
+
+    def add_action(self, actor_name, action_description):
+        """Adds an action to the history."""
+        self.history.append(f"ACTION: {actor_name} - {action_description}")
+
+    def add_dialogue(self, actor_name, dialogue_text):
+        """Adds dialogue to the history."""
+        self.history.append(f"DIALOGUE: {actor_name}: \"{dialogue_text}\"")
+
+    def get_history_string(self):
+        """Returns the history as a formatted string."""
+        if not self.history:
+            return "No recent history."
+        return "\n".join(list(self.history))
 
 
 # --- 3. Discrete Action Functions ---
@@ -281,7 +298,7 @@ available_tools = [
     },
 ]
 
-def get_llm_action_and_execute(input_command, actor):
+def get_llm_action_and_execute(input_command, actor, game_history_instance):
     """
     Sends the current game state and player command to the AI model,
     which then chooses an action (a function) to execute.
@@ -327,6 +344,7 @@ Actor Input: '{input_command}'
 - Objects Present (in the same location as {actor_name}): {objects_present}
 - Doors Present (in the same location as {actor_name}): {doors_present}
 - Traps Present (in the same location as {actor_name}): {traps_present}
+- Recent Game History: {game_history}
 
 **FUNCTION SELECTION RULES - Follow these steps:**
 1.  **Is the command using a skill (like search, lift, investigate, lockpick, disable device) on an object, door, trap or another actor?**
@@ -345,6 +363,7 @@ If no suitable function call can be made, return an empty response.
         objects_present=objects_in_room,
         doors_present=doors_in_room,
         traps_present=[current_trap['name']] if current_trap else [],
+        game_history=game_history_instance.get_history_string()
     )
 
     # Prepare and send the request to the AI model
@@ -355,7 +374,9 @@ If no suitable function call can be made, return an empty response.
 
         message = response.get("choices", [{}])[0].get("message", {})
         if not message.get("tool_calls"):
-            return f"{actor.name} is unable to decide on an action and passes the turn."
+            mechanical_result = f"{actor.name} is unable to decide on an action and passes the turn."
+            game_history_instance.add_action(actor.name, "could not decide on an action and passed the turn.")
+            return mechanical_result
             
         # Extract the function name and arguments from the AI's response
         tool_call = message['tool_calls'][0]['function']
@@ -363,14 +384,20 @@ If no suitable function call can be made, return an empty response.
         arguments = json.loads(tool_call['arguments'])
         
         if function_name == "execute_skill_check":
-            return execute_skill_check(actor, **arguments)
+            mechanical_result = execute_skill_check(actor, **arguments)
+            game_history_instance.add_action(actor.name, f"attempted to use {arguments.get('skill', 'an unknown skill')} on {arguments.get('target', 'an unknown target')}.")
+            return mechanical_result
         
-        return f"Error: The AI tried to call an unknown function '{function_name}'."
+        mechanical_result = f"Error: The AI tried to call an unknown function '{function_name}'."
+        game_history_instance.add_action(actor.name, mechanical_result)
+        return mechanical_result
     except Exception as e:
-        return f"Error communicating with AI: {e}"
+        mechanical_result = f"Error communicating with AI: {e}"
+        game_history_instance.add_action(actor.name, mechanical_result)
+        return mechanical_result
 
 # --- 5. Narrative LLM ---
-def get_actor_dialogue(actor, context):
+def get_actor_dialogue(actor, game_history_instance):
     """Generates dialogue for an actor using the LLM."""
     current_room, current_zone_data = environment.get_current_room_data(actor.location)
 
@@ -395,6 +422,7 @@ You are: '{actor_name}'
 - Current Statuses: {statuses}
 - Current Memories: {memories}
 - Current Mood/Personality: {personality}
+- Recent Game History: {game_history}
 
 Generate a short, in-character piece of dialogue (1-2 sentences) based on the current context and your personality.
 """
@@ -408,7 +436,8 @@ Generate a short, in-character piece of dialogue (1-2 sentences) based on the cu
         max_hp=actor.max_hp,
         statuses=", ".join(actor.source_data.get('statuses', [])) if actor.source_data.get('statuses') else "none",
         memories=", ".join(actor.source_data.get('memories', [])) if actor.source_data.get('memories') else "none",
-        personality=", ".join(actor.source_data.get('personality', [])) if actor.source_data.get('personality') else "none"
+        personality=", ".join(actor.source_data.get('personality', [])) if actor.source_data.get('personality') else "none",
+        game_history=game_history_instance.get_history_string()
     )
     
     headers = {"Content-Type": "application/json"}
@@ -416,15 +445,17 @@ Generate a short, in-character piece of dialogue (1-2 sentences) based on the cu
     try:
         response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
         dialogue = response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-        return f'{actor.name}: "{dialogue}"' if dialogue else f"{actor.name} remains silent."
+        full_dialogue = f'{actor.name}: "{dialogue}"' if dialogue else f"{actor.name} remains silent."
+        game_history_instance.add_dialogue(actor.name, dialogue)
+        return full_dialogue
     except Exception as e:
         return f"LLM Error (Narration): Could not get dialogue. {e}"
 
-def get_llm_story_response(mechanical_summary, actor):
+def get_llm_story_response(mechanical_summary):
     """
     Generates a narrative summary of the events that just occurred.
     """
-    current_room, current_zone_data = environment.get_current_room_data(actor.location)
+    current_room, current_zone_data = environment.get_current_room_data(players[0].location)
 
     # Get objects in the current room/zone
     objects_in_room = []
@@ -434,7 +465,7 @@ def get_llm_story_response(mechanical_summary, actor):
         objects_in_room.extend([obj['name'] for obj in current_room['objects']])
     
     # Get actors in the current room/zone
-    actors_in_room = [a.name for a in players + actors if a.location == actor.location]
+    actors_in_room = [a.name for a in players + actors if a.location == players[0].location]
 
     prompt_template = """You are a Game Master narrating a story.
 **CONTEXT**
@@ -442,8 +473,9 @@ def get_llm_story_response(mechanical_summary, actor):
 - Actors Present in this location: {actors_present}
 - Objects Present in this location: {objects_present}
 - Mechanical Outcome: {mechanical_summary}
+- Recent Game History: {game_history}
 
-Your Task: Write a 2-3 sentence narrative description of what just happened in the third person with a focus on {actor_name}.
+Your Task: Write a 2-3 sentence narrative description of what just happened in the third person with a focus on {player}.
 Describe the environment and the actor's action and its immediate outcome.
 """
 
@@ -454,7 +486,8 @@ Describe the environment and the actor's action and its immediate outcome.
         actors_present=", ".join(actors_in_room) if actors_in_room else "none",
         objects_present=", ".join(objects_in_room) if objects_in_room else "none",
         mechanical_summary=mechanical_summary,
-        actor_name=actor.name
+        player=players[0].name,
+        game_history=game_history.get_history_string() # Use the global game_history instance
     )
     
     headers = {"Content-Type": "application/json"}
@@ -482,7 +515,7 @@ def setup_initial_encounter():
     Sets up the game by loading the environment and creating characters.
     Populates global players, actors, and environment variables.
     """
-    global players, actors, environment, all_items
+    global players, actors, environment, all_items, game_history
 
     if not load_scenario(SCENARIO_FILE):
         print("Failed to load scenario. Exiting.")
@@ -494,6 +527,7 @@ def setup_initial_encounter():
         return False
 
     environment = Environment(scenario_data, all_items)
+    game_history = GameHistory() # Initialize game history
 
     # Setup Players
     for player_data in scenario_data.get('players', []):
@@ -622,15 +656,17 @@ def main_game_loop():
                 if DEBUG:
                     print(f"Location: {current_room['name']} (Zone {current_character.location['zone']}) - {current_zone_data['description']}")
                 
+                
+                # List objects in the current zone
+                objects_in_current_zone = current_zone_data.get('objects', [])
                 if DEBUG:
-                    # List objects in the current zone
-                    objects_in_current_zone = current_zone_data.get('objects', [])
                     if objects_in_current_zone:
                         print(f"Objects nearby: {[obj['name'] for obj in objects_in_current_zone]}")
                 
+                
+                # Check for armed traps in the current zone
+                current_trap = environment.get_trap_in_room(current_character.location['room_id'], current_character.location['zone'])
                 if DEBUG:
-                    # Check for armed traps in the current zone
-                    current_trap = environment.get_trap_in_room(current_character.location['room_id'], current_character.location['zone'])
                     if current_trap and current_trap['status'] == 'armed' and current_trap.get('known') != current_character.name:
                         print(f"WARNING: An unknown trap is armed in this zone! ({current_trap['name']})")
                     elif current_trap and current_trap['status'] == 'armed' and current_trap.get('known') == current_character.name:
@@ -645,28 +681,13 @@ def main_game_loop():
                         print("Exiting game.")
                         break
 
-                    mechanical_result = get_llm_action_and_execute(player_input, current_character)
+                    mechanical_result = get_llm_action_and_execute(player_input, current_character, game_history)
                     print(f"Mechanical Outcome: {mechanical_result}")
-                    print(get_llm_story_response(mechanical_result, current_character))
+                    #print(get_llm_story_response(mechanical_result, current_character))
                 # NPC/Actor turn
                 else:
-                    print(get_actor_dialogue(current_character, {})) # Placeholder for more complex context
+                    print(get_actor_dialogue(current_character, game_history)) # Pass game_history
                     # For now, NPCs will try to interact with known objects or just wait
-                    # A more complex AI would use get_llm_action_and_execute
-                    if current_trap and current_trap['status'] == 'armed' and current_trap.get('known') != current_character.name:
-                        mechanical_result = execute_skill_check(current_character, skill='search', target=current_trap['name'])
-                        print(f"Mechanical Outcome: {mechanical_result}")
-                        print(get_llm_story_response(mechanical_result, current_character))
-                    elif objects_in_current_zone:
-                        # Simple NPC action: try to interact with the first object they see
-                        first_object_name = objects_in_current_zone[0]['name']
-                        mechanical_result = f"{current_character.name} considers interacting with the {first_object_name} but does nothing for now."
-                        print(f"Mechanical Outcome: {mechanical_result}")
-                        print(get_llm_story_response(mechanical_result, current_character))
-                    else:
-                        mechanical_result = f"{current_character.name} surveys the area."
-                        print(f"Mechanical Outcome: {mechanical_result}")
-                        print(get_llm_story_response(mechanical_result, current_character))
 
                 # Check if all players are incapacitated or a game-ending condition is met
                 if all(p.cur_hp <= 0 for p in players):
@@ -680,6 +701,10 @@ def main_game_loop():
                     print("\nCongratulations! The chest in the Inner Sanctum has been looted. You have completed the scenario!")
                     game_active = False
                     break
+            
+            # Call get_llm_story_response only if mechanical_result is not None
+            if mechanical_result is not None:
+                print(get_llm_story_response(mechanical_result))
 
         print("\n--- Game End ---")
         sys.stdout = original_stdout # Restore stdout

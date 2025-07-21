@@ -5,9 +5,13 @@ players:
       room_id: room_1
       zone: 1
 actors:
-  - sheet: d6_orc.json
+#  - sheet: d6_orc.json
+#    location:
+#      room_id: room_2
+#      zone: 1
+  - sheet: d6_rogue.json
     location:
-      room_id: room_2
+      room_id: room_1
       zone: 1
 environment:
   doors:
