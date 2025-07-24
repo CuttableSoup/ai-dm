@@ -10,7 +10,7 @@ MODEL = "local-model/gemma-3-4b"  # Model used for deciding character actions
 LLM_API_URL = "http://localhost:1234/v1/chat/completions" # Local server URL
 SCENARIO_FILE = "scenario.yaml"   # The file containing the game's story and setup
 INVENTORY_FILE = "inventory.yaml" # The file containing all possible items
-DEBUG = True
+DEBUG = False
 
 # Global game state variables (will be populated by setup_initial_encounter)
 scenario_data = {}
@@ -351,9 +351,11 @@ Actor Input: '{input_command}'
     - If yes, you **MUST** call `execute_skill_check`.
     - The `skill` argument should be the skill used (e.g., 'Search', 'Lockpicking', 'Lifting', 'Disable Device'). **Ensure the skill is a valid skill from 'Actor Skills' and is relevant to the command.**
     - The `target` argument **MUST** be the name of the object, door, trap or actor from the list of 'Objects Present', 'Doors Present', 'Traps Present', or 'Actors Present'. **Ensure the target name exactly matches one of the provided names.**
+2.  **Is the command purely conversational (e.g., asking a question, making a statement, reacting to dialogue) and does NOT involve using a skill or interacting with an object/door/trap?**
+    - If yes, you **MUST NOT** call any function. Return an empty response, indicating no mechanical action is taken. The dialogue itself is the action.
 
 Based on these strict rules, select the correct function and parameters.
-If no suitable function call can be made, return an empty response.
+If no suitable function call can be made (because it's dialogue, or an unknown command), return an empty response (no tool call).
 """
     prompt = prompt_template.format(
         input_command=input_command,
@@ -410,8 +412,18 @@ def get_actor_dialogue(actor, game_history_instance):
     
     # Get actors in the current room/zone (excluding the current actor)
     actors_in_room = [a.name for a in players + actors if a.location == actor.location and a.name != actor.name]
+    
+    # Extract character qualities for the prompt
+    character_quotes = actor.source_data.get('quotes', {})
+    character_qualities = actor.source_data.get('qualities', {})
+    gender = character_qualities.get('gender', 'unknown')
+    race = character_qualities.get('race', 'unknown')
+    occupation = character_qualities.get('occupation', 'unknown')
+    eyes = character_qualities.get('eyes', 'unknown')
+    hair = character_qualities.get('hair', 'unknown')
+    skin = character_qualities.get('skin', 'unknown')
 
-    prompt_template = """You are an AI assistant for a text-based game. Your task is to provide dialogue for a specific actor.
+    prompt_template = """You are an AI assistant for a text-based game. Your task is to provide dialogue for a specific actor in the third person.
 You are: '{actor_name}'
 
 **CONTEXT**
@@ -423,6 +435,14 @@ You are: '{actor_name}'
 - Current Memories: {memories}
 - Current Mood/Personality: {personality}
 - Recent Game History: {game_history}
+- Character quotes: {character_quotes}
+- Character Qualities (for narrative description of {actor_name}):
+  - Gender: {actor_gender}
+  - Race: {actor_race}
+  - Occupation: {actor_occupation}
+  - Eyes: {actor_eyes}
+  - Hair: {actor_hair}
+  - Skin: {actor_skin}
 
 Generate a short, in-character piece of dialogue (1-2 sentences) based on the current context and your personality.
 """
@@ -437,7 +457,14 @@ Generate a short, in-character piece of dialogue (1-2 sentences) based on the cu
         statuses=", ".join(actor.source_data.get('statuses', [])) if actor.source_data.get('statuses') else "none",
         memories=", ".join(actor.source_data.get('memories', [])) if actor.source_data.get('memories') else "none",
         personality=", ".join(actor.source_data.get('personality', [])) if actor.source_data.get('personality') else "none",
-        game_history=game_history_instance.get_history_string()
+        game_history=game_history_instance.get_history_string(),
+        character_quotes=character_quotes,
+        actor_gender=gender,
+        actor_race=race,
+        actor_occupation=occupation,
+        actor_eyes=eyes,
+        actor_hair=hair,
+        actor_skin=skin
     )
     
     headers = {"Content-Type": "application/json"}
@@ -451,11 +478,11 @@ Generate a short, in-character piece of dialogue (1-2 sentences) based on the cu
     except Exception as e:
         return f"LLM Error (Narration): Could not get dialogue. {e}"
 
-def get_llm_story_response(mechanical_summary):
+def get_llm_story_response(mechanical_summary, actor): # Add 'actor' parameter
     """
     Generates a narrative summary of the events that just occurred.
     """
-    current_room, current_zone_data = environment.get_current_room_data(players[0].location)
+    current_room, current_zone_data = environment.get_current_room_data(actor.location) # Use actor.location
 
     # Get objects in the current room/zone
     objects_in_room = []
@@ -463,9 +490,18 @@ def get_llm_story_response(mechanical_summary):
         objects_in_room.extend([obj['name'] for obj in current_zone_data['objects']])
     if current_room and 'objects' in current_room:
         objects_in_room.extend([obj['name'] for obj in current_room['objects']])
-    
+
     # Get actors in the current room/zone
-    actors_in_room = [a.name for a in players + actors if a.location == players[0].location]
+    actors_in_room = [a.name for a in players + actors if a.location == actor.location]
+
+    # Extract character qualities for the prompt
+    character_qualities = actor.source_data.get('qualities', {})
+    gender = character_qualities.get('gender', 'unknown')
+    race = character_qualities.get('race', 'unknown')
+    occupation = character_qualities.get('occupation', 'unknown')
+    eyes = character_qualities.get('eyes', 'unknown')
+    hair = character_qualities.get('hair', 'unknown')
+    skin = character_qualities.get('skin', 'unknown')
 
     prompt_template = """You are a Game Master narrating a story.
 **CONTEXT**
@@ -474,9 +510,16 @@ def get_llm_story_response(mechanical_summary):
 - Objects Present in this location: {objects_present}
 - Mechanical Outcome: {mechanical_summary}
 - Recent Game History: {game_history}
+- Character Qualities (for narrative description of {player_name}):
+  - Gender: {player_gender}
+  - Race: {player_race}
+  - Occupation: {player_occupation}
+  - Eyes: {player_eyes}
+  - Hair: {player_hair}
+  - Skin: {player_skin}
 
-Your Task: Write a 2-3 sentence narrative description of what just happened in the third person with a focus on {player}.
-Describe the environment and the actor's action and its immediate outcome.
+Your Task: Write a 2-3 sentence narrative description of what just happened in the third person with a focus on {player_name}.
+Describe the environment and the character's action and its immediate outcome. Use the character's gender and other qualities naturally in your description.
 """
 
     # Format the prompt with all the necessary context
@@ -486,10 +529,16 @@ Describe the environment and the actor's action and its immediate outcome.
         actors_present=", ".join(actors_in_room) if actors_in_room else "none",
         objects_present=", ".join(objects_in_room) if objects_in_room else "none",
         mechanical_summary=mechanical_summary,
-        player=players[0].name,
-        game_history=game_history.get_history_string() # Use the global game_history instance
+        player_name=actor.name, # Use actor.name here
+        game_history=game_history.get_history_string(),
+        player_gender=gender,
+        player_race=race,
+        player_occupation=occupation,
+        player_eyes=eyes,
+        player_hair=hair,
+        player_skin=skin
     )
-    
+
     headers = {"Content-Type": "application/json"}
     payload = {"model": MODEL, "messages": [{"role": "user", "content": prompt}]}
     try:
@@ -584,7 +633,7 @@ class Tee:
 
 def main_game_loop():
     """The main loop that runs the game."""
-    log_file_name = datetime.now().strftime("game_log_%Y%m%d_%H%M%S.log")
+    log_file_name = datetime.now().strftime("game_log_%Y%m%d_%H%M%S.rtf")
     
     # Check if the 'logs' directory exists, create if not
     log_dir = 'logs'
@@ -674,20 +723,42 @@ def main_game_loop():
 
 
                 # Player turn
+                # Inside main_game_loop, in the player turn section:
                 if current_character.is_player:
-                    player_input = input(f"{current_character.name}, your action > ").strip().lower()
-                    if player_input == 'quit':
+                    player_input = input(f"{current_character.name}, your action > ").strip() # Don't lower() here yet, need original case for dialogue
+
+                    # Check if it's likely a conversational input (simple heuristic)
+                    # You might need a more sophisticated way to detect pure dialogue vs. commands
+                    is_conversational_input = True # Default, then check for command patterns
+
+                    # Simple check: if it doesn't start with a known skill or command keyword
+                    # This is a basic example; you might refine this.
+                    command_keywords = ["use", "search", "lift", "investigate", "lockpick", "disable", "attack", "examine", "open", "look"]
+                    if any(player_input.lower().startswith(kw) for kw in command_keywords):
+                        is_conversational_input = False
+
+
+                    if player_input.lower() == 'quit':
                         game_active = False
                         print("Exiting game.")
                         break
 
-                    mechanical_result = get_llm_action_and_execute(player_input, current_character, game_history)
-                    print(f"Mechanical Outcome: {mechanical_result}")
-                    #print(get_llm_story_response(mechanical_result, current_character))
+                    mechanical_result = None # Initialize mechanical_result
+                    if is_conversational_input:
+                        # Assume it's dialogue and add to history directly
+                        dialogue_text = player_input # Use the original case for dialogue
+                        game_history.add_dialogue(current_character.name, dialogue_text)
+                        mechanical_result = f"{current_character.name} spoke." # Simple mechanical result for narrative
+                    else:
+                        # It's a command, try to get LLM action
+                        mechanical_result = get_llm_action_and_execute(player_input, current_character, game_history)
+                        print(f"Mechanical Outcome: {mechanical_result}")
+
+                    # The story response will use the history that now includes the dialogue
+                    #print(get_llm_story_response(mechanical_result))
                 # NPC/Actor turn
                 else:
                     print(get_actor_dialogue(current_character, game_history)) # Pass game_history
-                    # For now, NPCs will try to interact with known objects or just wait
 
                 # Check if all players are incapacitated or a game-ending condition is met
                 if all(p.cur_hp <= 0 for p in players):
@@ -702,9 +773,9 @@ def main_game_loop():
                     game_active = False
                     break
             
-            # Call get_llm_story_response only if mechanical_result is not None
-            if mechanical_result is not None:
-                print(get_llm_story_response(mechanical_result))
+            # Call get_llm_story_response only if mechanical_result is not None AND doesn't include 'spoke'
+            if mechanical_result is not None and 'spoke' not in mechanical_result.lower():
+                print(get_llm_story_response(mechanical_result, current_character))
 
         print("\n--- Game End ---")
         sys.stdout = original_stdout # Restore stdout

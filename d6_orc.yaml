@@ -47,6 +47,10 @@ inventory:
   quantity: 1
   equipped: true
 
+quotes:
+- "Right, you lot, less o' the natterin' and more o' the bashin'! We ain't got all day to poke about like a goblin wi' a stitch."
+- "Blimey, that knight's 'eavy metal's gonna make a proper racket when I introduce 'im to me choppa, innit?"
+
 memories:
 - "faced Valerius in combat before, took his left eye"
 - "charged with protecting the chest"
