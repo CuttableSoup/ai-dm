@@ -5,9 +5,32 @@ import os
 from datetime import datetime
 from collections import deque # For the GameHistory class
 from d6_rules import *
+import sys # Needed for stdout redirection in main_game_loop
+import random # Needed for roll_initiative
 
-MODEL = "local-model/gemma-3-4b"  # Model used for deciding character actions
-LLM_API_URL = "http://localhost:1234/v1/chat/completions" # Local server URL
+# Import the new configuration file
+import config
+
+# --- Model Configuration ---
+# Set this to True to use the OpenRouter model, False to use the local model
+USE_OPENROUTER_MODEL = True 
+
+if USE_OPENROUTER_MODEL:
+    MODEL = "google/gemma-3-12b-it:free"
+    LLM_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+    OPENROUTER_API_KEY = config.OPENROUTER_API_KEY # Get the API key from config.py
+    # OpenRouter requires a Referer or X-Title header. For local development, a placeholder is fine.
+    OPENROUTER_HEADERS = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "HTTP-Referer": "http://localhost:8000" # You can replace this with your actual app URL if deployed
+    }
+else:
+    MODEL = "local-model/gemma-3-12b"
+    LLM_API_URL = "http://localhost:1234/v1/chat/completions"
+    LOCAL_HEADERS = {"Content-Type": "application/json"} # Headers for local model
+
+
 SCENARIO_FILE = "scenario.yaml"   # The file containing the game's story and setup
 INVENTORY_FILE = "inventory.yaml" # The file containing all possible items
 DEBUG = False
@@ -368,8 +391,9 @@ If no suitable function call can be made (because it's dialogue, or an unknown c
         game_history=game_history_instance.get_history_string()
     )
 
-    # Prepare and send the request to the AI model
-    headers = {"Content-Type": "application/json"}
+    # Use appropriate headers based on the model chosen
+    headers = OPENROUTER_HEADERS if USE_OPENROUTER_MODEL else LOCAL_HEADERS
+
     payload = {"model": MODEL, "messages": [{"role": "user", "content": prompt}], "tools": available_tools, "tool_choice": "auto"}
     try:
         response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
@@ -467,7 +491,9 @@ Generate a short, in-character piece of dialogue (1-2 sentences) based on the cu
         actor_skin=skin
     )
     
-    headers = {"Content-Type": "application/json"}
+    # Use appropriate headers based on the model chosen
+    headers = OPENROUTER_HEADERS if USE_OPENROUTER_MODEL else LOCAL_HEADERS
+    
     payload = {"model": MODEL, "messages": [{"role": "user", "content": prompt}], "max_tokens": 60}
     try:
         response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
@@ -539,7 +565,9 @@ Describe the environment and the character's action and its immediate outcome. U
         player_skin=skin
     )
 
-    headers = {"Content-Type": "application/json"}
+    # Use appropriate headers based on the model chosen
+    headers = OPENROUTER_HEADERS if USE_OPENROUTER_MODEL else LOCAL_HEADERS
+    
     payload = {"model": MODEL, "messages": [{"role": "user", "content": prompt}]}
     try:
         response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
@@ -660,18 +688,18 @@ def main_game_loop():
                 current_room, current_zone = environment.get_current_room_data(player.location)
                 print(f"Player: {player.name} is in {current_room['name']} (Zone {player.location['zone']}). HP: {player.cur_hp}/{player.max_hp}")
                 if current_zone:
-                    print(f"  Zone Description: {current_zone['description']}")
+                    print(f"   Zone Description: {current_zone['description']}")
                     if 'objects' in current_zone and current_zone['objects']:
-                        print(f"  Objects in Zone: {[obj['name'] for obj in current_zone['objects']]}")
+                        print(f"   Objects in Zone: {[obj['name'] for obj in current_zone['objects']]}")
                     if 'trap' in current_zone:
-                        print(f"  There's a {current_zone['trap']['name']} here.")
-                print(f"  Inventory: {[{item['item']: item['quantity']} for item in player.inventory]}")
+                        print(f"   There's a {current_zone['trap']['name']} here.")
+                print(f"   Inventory: {[{item['item']: item['quantity']} for item in player.inventory]}")
         
         for actor_npc in actors:
             current_room, current_zone = environment.get_current_room_data(actor_npc.location)
             print(f"NPC: {actor_npc.name} is in {current_room['name']} (Zone {actor_npc.location['zone']}). HP: {actor_npc.cur_hp}/{actor_npc.max_hp}")
             if current_zone:
-                print(f"  Zone Description: {current_zone['description']}")
+                print(f"   Zone Description: {current_zone['description']}")
 
         game_active = True
         turn_count = 0
@@ -781,5 +809,4 @@ def main_game_loop():
         sys.stdout = original_stdout # Restore stdout
 
 if __name__ == "__main__":
-    import sys
     main_game_loop()
