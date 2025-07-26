@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 from collections import deque # For the GameHistory class
 from d6_rules import *
+from actions import execute_skill_check # <-- IMPORT a new function
 import sys # Needed for stdout redirection in main_game_loop
 import random # Needed for roll_initiative
 import config
@@ -177,134 +178,7 @@ class GameHistory:
 
 
 # --- 3. Discrete Action Functions ---
-def execute_skill_check(actor, skill=None, target=None):
-    """
-    Performs a general skill check against a target (object, trap, or another actor)
-    or a static difficulty.
-    """
-    if not skill or not target:
-        return f"ERROR: Skill '{skill}' or target '{target}' not specified for skill check."
-
-    # Try to find the target as an object in the current room/zone
-    current_room, current_zone_data = environment.get_current_room_data(actor.location)
-    
-    target_object = None
-    if current_zone_data and 'objects' in current_zone_data:
-        for obj in current_zone_data['objects']:
-            if obj['name'].lower() == target.lower():
-                target_object = obj
-                break
-    if not target_object and 'objects' in current_room: # Check room-level objects too
-        for obj in current_room['objects']:
-            if obj['name'].lower() == target.lower():
-                target_object = obj
-                break
-
-    # Try to find the target as a door
-    target_door = environment.get_door_by_id(target)
-    if not target_door and target_object is None: # If not found by ID, try by name
-        for door_id, door_data in environment.doors.items():
-            if door_data['name'].lower() == target.lower():
-                target_door = door_data
-                break
-
-    # Try to find the target as a trap
-    target_trap = environment.get_trap_in_room(actor.location['room_id'], actor.location['zone'])
-    if target_trap and target_trap['name'].lower() == target.lower():
-        # Only proceed if the skill is related to the trap's actions
-        if skill.lower() not in [action['skill'].lower() for action in target_trap.get('actions', [])]:
-            return f"{actor.name} can't use {skill} on the {target}."
-        
-        # Override target_object with trap data for consistent processing
-        target_object = target_trap
-        is_trap = True
-    else:
-        is_trap = False
-
-
-    if target_object:
-        # Check if the skill can be applied to the object/trap
-        action_found = False
-        outcome_message = ""
-        for action in target_object.get('actions', []):
-            if action['skill'].lower() == skill.lower():
-                action_found = True
-                difficulty = action.get('difficulty', 0)
-                
-                actor_pips = actor.get_attribute_or_skill_pips(skill)
-                success_level, roll_total = roll_d6_check(actor_pips, difficulty)
-
-                if success_level > 0:
-                    outcome = action.get('pass', 'success')
-                    if outcome == 'open' and (target_door or target_object.get('name').lower() == 'chest'):
-                        if target_door:
-                            target_door['status'] = 'open'
-                            outcome_message = f"{actor.name} successfully used {skill} on the {target}. The {target_door['name']} is now open."
-                        elif target_object.get('name').lower() == 'chest':
-                            target_object['status'] = 'open' # Assuming chests can have a status
-                            inventory_items = []
-                            if 'inventory' in target_object:
-                                for item_data in target_object['inventory']:
-                                    item_name = item_data['item']
-                                    item_quantity = item_data.get('quantity', 1)
-                                    inventory_items.append(f"{item_quantity} {item_name}")
-                                    # Add to actor's inventory
-                                    actor.inventory.append({'item': item_name, 'quantity': item_quantity})
-                                target_object['inventory'] = [] # Empty the chest
-                            outcome_message = f"{actor.name} successfully used {skill} on the {target} and opened it. Inside, you find: {', '.join(inventory_items) if inventory_items else 'nothing'}."
-                    elif outcome == 'disarm' and is_trap:
-                        target_trap['status'] = 'disarmed'
-                        outcome_message = f"{actor.name} successfully used {skill} on the {target} and disarmed it."
-                    elif outcome == 'known' and is_trap:
-                        target_trap['known'] = actor.name # Mark the trap as known by the actor
-                        outcome_message = f"{actor.name} successfully used {skill} on the {target} and now knows about the {target_trap['name']}."
-                    else:
-                        outcome_message = f"{actor.name} successfully used {skill} on the {target}. {action.get('pass', 'It worked!')}"
-                else:
-                    outcome = action.get('fail', 'nothing')
-                    if outcome == 'jam' and (target_door or target_object.get('name').lower() == 'chest'):
-                        if target_door:
-                            target_door['status'] = 'jammed'
-                            outcome_message = f"{actor.name} failed to use {skill} on the {target}. The {target_door['name']} is now jammed and cannot be opened."
-                        elif target_object.get('name').lower() == 'chest':
-                            target_object['status'] = 'jammed'
-                            outcome_message = f"{actor.name} failed to use {skill} on the {target}. The {target_object['name']} is now jammed."
-                    elif outcome == 'attack' and is_trap:
-                        if target_trap['status'] == 'armed' and target_trap['known'] != actor.name:
-                            attack_roll = roll_d6_dice(target_trap['attack'])
-                            damage_roll = roll_d6_dice(target_trap['damage'])
-                            
-                            damage_taken = damage_roll
-                            
-                            outcome_message = f"{actor.name} failed to use {skill} on the {target}. The {target_trap['name']} attacked! {actor.take_damage(damage_taken)}"
-                            target_trap['status'] = 'sprung' # Trap springs after attacking
-                        else:
-                            outcome_message = f"{actor.name} failed to use {skill} on the {target}. Nothing happens because the trap is already disarmed or known."
-                    else:
-                        outcome_message = f"{actor.name} failed to use {skill} on the {target}. {action.get('fail', 'Nothing happens.')}"
-                return outcome_message
-
-        if not action_found:
-            return f"{actor.name} cannot use {skill} on the {target}."
-    
-    # Try to find the target as another actor
-    target_actor = next((a for a in players + actors if a.name.lower() == target.lower()), None)
-    if target_actor:
-        # For now, we'll just say a skill check was attempted on an actor without specific combat logic
-        # Combat would involve comparing skills and attributes directly
-        actor_pips = actor.get_attribute_or_skill_pips(skill)
-        target_pips = target_actor.get_attribute_or_skill_pips(skill) # Or an opposing skill
-        
-        # Simple opposed roll example (needs more sophisticated combat rules)
-        if skill.lower() in COMBAT_SKILLS:
-            # This is a very basic example and needs proper combat resolution rules
-            # For now, just a generic message
-            return f"{actor.name} attempts to use {skill} on {target_actor.name}. Combat resolution rules not fully implemented."
-        else:
-            return f"{actor.name} tries to use {skill} on {target_actor.name}, but nothing specific happens with that skill for now."
-
-    return f"Could not find target '{target}' for skill check."
-
+# execute_skill_check has been moved to actions.py
 
 # --- 4. AI Tool Definitions & Execution ---
 available_tools = [
@@ -357,32 +231,32 @@ def get_llm_action_and_execute(input_command, actor, game_history_instance):
 
     # An explicit, rule-based prompt to guide the AI
     prompt_template = """You are an AI assistant for a text-based game. Your task is to translate an actor's command into a specific function call.
-Actor Input: '{input_command}'
+    Actor Input: '{input_command}'
 
-**CONTEXT**
-- Actor Name: {actor_name}
-- Actor Skills: {actor_skills}
-- Current Statuses: {statuses}
-- Current Memories: {memories}
-- Current Mood/Personality: {personality}
-- Character quotes: {character_quotes}
-- Actors Present (and in the same location as {actor_name}): {actors_present}
-- Objects Present (in the same location as {actor_name}): {objects_present}
-- Doors Present (in the same location as {actor_name}): {doors_present}
-- Traps Present (in the same location as {actor_name}): {traps_present}
-- Recent Game History: {game_history}
+    **CONTEXT**
+    - Actor Name: {actor_name}
+    - Actor Skills: {actor_skills}
+    - Current Statuses: {statuses}
+    - Current Memories: {memories}
+    - Current Mood/Personality: {personality}
+    - Character quotes: {character_quotes}
+    - Actors Present (and in the same location as {actor_name}): {actors_present}
+    - Objects Present (in the same location as {actor_name}): {objects_present}
+    - Doors Present (in the same location as {actor_name}): {doors_present}
+    - Traps Present (in the same location as {actor_name}): {traps_present}
+    - Recent Game History: {game_history}
 
-**FUNCTION SELECTION RULES - Follow these steps:**
-1.  **Is the command using a skill (like search, lift, investigate, lockpick, disable device) on an object, door, trap or another actor?**
-    - If yes, you **MUST** call `execute_skill_check`.
-    - The `skill` argument should be the skill used (e.g., 'Search', 'Lockpicking', 'Lifting', 'Disable Device'). **Ensure the skill is a valid skill from 'Actor Skills' and is relevant to the command.**
-    - The `target` argument **MUST** be the name of the object, door, trap or actor from the list of 'Objects Present', 'Doors Present', 'Traps Present', or 'Actors Present'. **Ensure the target name exactly matches one of the provided names.**
-2.  **Is the command purely conversational (e.g., asking a question, making a statement, reacting to dialogue) and does NOT involve using a skill or interacting with an object/door/trap?**
-    - If yes, you **MUST NOT** call any function. Return an empty response, indicating no mechanical action is taken. The dialogue itself is the action.
+    **FUNCTION SELECTION RULES - Follow these steps:**
+    1.  **Is the command using a skill (like search, lift, investigate, lockpick, disable device) on an object, door, trap or another actor?**
+        - If yes, you **MUST** call `execute_skill_check`.
+        - The `skill` argument should be the skill used (e.g., 'Search', 'Lockpicking', 'Lifting', 'Disable Device'). **Ensure the skill is a valid skill from 'Actor Skills' and is relevant to the command.**
+        - The `target` argument **MUST** be the name of the object, door, trap or actor from the list of 'Objects Present', 'Doors Present', 'Traps Present', or 'Actors Present'. **Ensure the target name exactly matches one of the provided names.**
+    2.  **Is the command purely conversational (e.g., asking a question, making a statement, reacting to dialogue) and does NOT involve using a skill or interacting with an object/door/trap?**
+        - If yes, you **MUST NOT** call any function. Return an empty response, indicating no mechanical action is taken. The dialogue itself is the action.
 
-Based on these strict rules, select the correct function and parameters.
-If no suitable function call can be made (because it's dialogue, or an unknown command), return an empty response (no tool call).
-"""
+    Based on these strict rules, select the correct function and parameters.
+    If no suitable function call can be made (because it's dialogue, or an unknown command), return an empty response (no tool call).
+    """
     prompt = prompt_template.format(
         input_command=input_command,
         actor_name=actor.name,
@@ -421,7 +295,8 @@ If no suitable function call can be made (because it's dialogue, or an unknown c
         arguments = json.loads(tool_call['arguments'])
         
         if function_name == "execute_skill_check":
-            mechanical_result = execute_skill_check(actor, **arguments)
+            # Pass the required game state objects to the function
+            mechanical_result = execute_skill_check(actor, environment=environment, players=players, actors=actors, **arguments)
             game_history_instance.add_action(actor.name, f"attempted to use {arguments.get('skill', 'an unknown skill')} on {arguments.get('target', 'an unknown target')}.")
             return mechanical_result
         
@@ -679,13 +554,11 @@ def main_game_loop():
                 if DEBUG:
                     print(f"Location: {current_room['name']} (Zone {current_character.location['zone']}) - {current_zone_data['description']}")
                 
-                
                 # List objects in the current zone
                 objects_in_current_zone = current_zone_data.get('objects', [])
                 if DEBUG:
                     if objects_in_current_zone:
                         print(f"Objects nearby: {[obj['name'] for obj in objects_in_current_zone]}")
-                
                 
                 # Check for armed traps in the current zone
                 current_trap = environment.get_trap_in_room(current_character.location['room_id'], current_character.location['zone'])
@@ -695,64 +568,20 @@ def main_game_loop():
                     elif current_trap and current_trap['status'] == 'armed' and current_trap.get('known') == current_character.name:
                         print(f"You know there is an armed {current_trap['name']} here.")
 
-
                 # Player turn
-                # Inside main_game_loop, in the player turn section:
                 if current_character.is_player:
-                    player_input = input(f"{current_character.name}, your action > ").strip() # Don't lower() here yet, need original case for dialogue
-
-                    # Check if it's likely a conversational input (simple heuristic)
-                    # You might need a more sophisticated way to detect pure dialogue vs. commands
-                    is_conversational_input = True # Default, then check for command patterns
-
-                    # Simple check: if it doesn't start with a known skill or command keyword
-                    # This is a basic example; you might refine this.
-                    command_keywords = ["use", "search", "lift", "investigate", "lockpick", "disable", "attack", "examine", "open", "look"]
-                    if any(player_input.lower().startswith(kw) for kw in command_keywords):
-                        is_conversational_input = False
-
-
-                    if player_input.lower() == 'quit':
-                        game_active = False
-                        print("Exiting game.")
-                        break
-
-                    mechanical_result = None # Initialize mechanical_result
-                    if is_conversational_input:
-                        # Assume it's dialogue and add to history directly
-                        dialogue_text = player_input # Use the original case for dialogue
-                        game_history.add_dialogue(current_character.name, dialogue_text)
-                        mechanical_result = f"{current_character.name} spoke." # Simple mechanical result for narrative
-                    else:
-                        # It's a command, try to get LLM action
-                        mechanical_result = get_llm_action_and_execute(player_input, current_character, game_history)
+                    player_input = input(f"{current_character.name}, your action > ").strip()
+                    mechanical_result = get_llm_action_and_execute(player_input, current_character, game_history)
+                    
+                    if DEBUG:
                         print(f"Mechanical Outcome: {mechanical_result}")
 
-                    # The story response will use the history that now includes the dialogue
-                    #print(get_llm_story_response(mechanical_result))
                 # NPC/Actor turn
                 else:
-                    print(get_llm_response(current_character)) # Pass game_history
-
-                # Check if all players are incapacitated or a game-ending condition is met
-                if all(p.cur_hp <= 0 for p in players):
-                    print("\nAll players are incapacitated. Game Over!")
-                    game_active = False
-                    break
-                
-                # Simple win condition: if chest is open and empty
-                inner_sanctum_chest = environment.get_object_in_room('room_2', 'chest')
-                if inner_sanctum_chest and inner_sanctum_chest.get('status') == 'open' and not inner_sanctum_chest.get('inventory'):
-                    print("\nCongratulations! The chest in the Inner Sanctum has been looted. You have completed the scenario!")
-                    game_active = False
-                    break
-            
-            # Call get_llm_story_response only if mechanical_result is not None AND doesn't include 'spoke'
-            if mechanical_result is not None and 'spoke' not in mechanical_result.lower():
-                print(get_llm_response(current_character))
+                    print(get_llm_response(current_character))
 
         print("\n--- Game End ---")
-        sys.stdout = original_stdout # Restore stdout
+        sys.stdout = original_stdout
 
 if __name__ == "__main__":
     main_game_loop()
