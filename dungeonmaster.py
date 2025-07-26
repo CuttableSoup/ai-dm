@@ -7,13 +7,11 @@ from collections import deque # For the GameHistory class
 from d6_rules import *
 import sys # Needed for stdout redirection in main_game_loop
 import random # Needed for roll_initiative
-
-# Import the new configuration file
 import config
 
 # --- Model Configuration ---
 # Set this to True to use the OpenRouter model, False to use the local model
-USE_OPENROUTER_MODEL = True 
+USE_OPENROUTER_MODEL = False 
 
 if USE_OPENROUTER_MODEL:
     MODEL = "google/gemma-3-12b-it:free"
@@ -40,6 +38,7 @@ scenario_data = {}
 all_items = {}
 players = []
 actors = []
+mechanical_summary = None
 environment = None # Will be an instance of the Environment class
 game_history = None # Will be an instance of the GameHistory class
 
@@ -363,6 +362,10 @@ Actor Input: '{input_command}'
 **CONTEXT**
 - Actor Name: {actor_name}
 - Actor Skills: {actor_skills}
+- Current Statuses: {statuses}
+- Current Memories: {memories}
+- Current Mood/Personality: {personality}
+- Character quotes: {character_quotes}
 - Actors Present (and in the same location as {actor_name}): {actors_present}
 - Objects Present (in the same location as {actor_name}): {objects_present}
 - Doors Present (in the same location as {actor_name}): {doors_present}
@@ -384,6 +387,10 @@ If no suitable function call can be made (because it's dialogue, or an unknown c
         input_command=input_command,
         actor_name=actor.name,
         actor_skills=list(actor.skills.keys()),
+        statuses=", ".join(actor.source_data.get('statuses', [])) if actor.source_data.get('statuses') else "none",
+        memories=", ".join(actor.source_data.get('memories', [])) if actor.source_data.get('memories') else "none",
+        personality=", ".join(actor.source_data.get('personality', [])) if actor.source_data.get('personality') else "none",
+        character_quotes=", ".join(actor.source_data.get('quotes', [])) if actor.source_data.get('quotes') else "none",
         actors_present=actors_in_room,
         objects_present=objects_in_room,
         doors_present=doors_in_room,
@@ -395,6 +402,10 @@ If no suitable function call can be made (because it's dialogue, or an unknown c
     headers = OPENROUTER_HEADERS if USE_OPENROUTER_MODEL else LOCAL_HEADERS
 
     payload = {"model": MODEL, "messages": [{"role": "user", "content": prompt}], "tools": available_tools, "tool_choice": "auto"}
+    
+    if DEBUG:
+        print(f"\n--- LLM Narrative Request Payload ---\n{json.dumps(payload, indent=2)}\n-----------------------------------\n")
+    
     try:
         response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
 
@@ -423,88 +434,7 @@ If no suitable function call can be made (because it's dialogue, or an unknown c
         return mechanical_result
 
 # --- 5. Narrative LLM ---
-def get_actor_dialogue(actor, game_history_instance):
-    """Generates dialogue for an actor using the LLM."""
-    current_room, current_zone_data = environment.get_current_room_data(actor.location)
-
-    # Get objects in the current room/zone
-    objects_in_room = []
-    if current_zone_data and 'objects' in current_zone_data:
-        objects_in_room.extend([obj['name'] for obj in current_zone_data['objects']])
-    if current_room and 'objects' in current_room:
-        objects_in_room.extend([obj['name'] for obj in current_room['objects']])
-    
-    # Get actors in the current room/zone (excluding the current actor)
-    actors_in_room = [a.name for a in players + actors if a.location == actor.location and a.name != actor.name]
-    
-    # Extract character qualities for the prompt
-    character_quotes = actor.source_data.get('quotes', {})
-    character_qualities = actor.source_data.get('qualities', {})
-    gender = character_qualities.get('gender', 'unknown')
-    race = character_qualities.get('race', 'unknown')
-    occupation = character_qualities.get('occupation', 'unknown')
-    eyes = character_qualities.get('eyes', 'unknown')
-    hair = character_qualities.get('hair', 'unknown')
-    skin = character_qualities.get('skin', 'unknown')
-
-    prompt_template = """You are an AI assistant for a text-based game. Your task is to provide dialogue for a specific actor in the third person.
-You are: '{actor_name}'
-
-**CONTEXT**
-- Your Current Location: {room_name} - {zone_description}
-- Other Actors Present in this location: {actors_present}
-- Objects Present in this location: {objects_present}
-- Current HP: {current_hp}/{max_hp}
-- Current Statuses: {statuses}
-- Current Memories: {memories}
-- Current Mood/Personality: {personality}
-- Recent Game History: {game_history}
-- Character quotes: {character_quotes}
-- Character Qualities (for narrative description of {actor_name}):
-  - Gender: {actor_gender}
-  - Race: {actor_race}
-  - Occupation: {actor_occupation}
-  - Eyes: {actor_eyes}
-  - Hair: {actor_hair}
-  - Skin: {actor_skin}
-
-Generate a short, in-character piece of dialogue (1-2 sentences) based on the current context and your personality.
-"""
-    prompt = prompt_template.format(
-        actor_name=actor.name,
-        room_name=current_room['name'] if current_room else 'Unknown Room',
-        zone_description=current_zone_data['description'] if current_zone_data else 'No specific zone description.',
-        actors_present=", ".join(actors_in_room) if actors_in_room else "none",
-        objects_present=", ".join(objects_in_room) if objects_in_room else "none",
-        current_hp=actor.cur_hp,
-        max_hp=actor.max_hp,
-        statuses=", ".join(actor.source_data.get('statuses', [])) if actor.source_data.get('statuses') else "none",
-        memories=", ".join(actor.source_data.get('memories', [])) if actor.source_data.get('memories') else "none",
-        personality=", ".join(actor.source_data.get('personality', [])) if actor.source_data.get('personality') else "none",
-        game_history=game_history_instance.get_history_string(),
-        character_quotes=character_quotes,
-        actor_gender=gender,
-        actor_race=race,
-        actor_occupation=occupation,
-        actor_eyes=eyes,
-        actor_hair=hair,
-        actor_skin=skin
-    )
-    
-    # Use appropriate headers based on the model chosen
-    headers = OPENROUTER_HEADERS if USE_OPENROUTER_MODEL else LOCAL_HEADERS
-    
-    payload = {"model": MODEL, "messages": [{"role": "user", "content": prompt}], "max_tokens": 60}
-    try:
-        response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
-        dialogue = response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-        full_dialogue = f'{actor.name}: "{dialogue}"' if dialogue else f"{actor.name} remains silent."
-        game_history_instance.add_dialogue(actor.name, dialogue)
-        return full_dialogue
-    except Exception as e:
-        return f"LLM Error (Narration): Could not get dialogue. {e}"
-
-def get_llm_story_response(mechanical_summary, actor): # Add 'actor' parameter
+def get_llm_response(actor):
     """
     Generates a narrative summary of the events that just occurred.
     """
@@ -530,23 +460,33 @@ def get_llm_story_response(mechanical_summary, actor): # Add 'actor' parameter
     skin = character_qualities.get('skin', 'unknown')
 
     prompt_template = """You are a Game Master narrating a story.
-**CONTEXT**
-- Current Room: {room_name} - {zone_description}
-- Actors Present in this location: {actors_present}
-- Objects Present in this location: {objects_present}
-- Mechanical Outcome: {mechanical_summary}
-- Recent Game History: {game_history}
-- Character Qualities (for narrative description of {player_name}):
-  - Gender: {player_gender}
-  - Race: {player_race}
-  - Occupation: {player_occupation}
-  - Eyes: {player_eyes}
-  - Hair: {player_hair}
-  - Skin: {player_skin}
+    **CONTEXT**
+    - Current Room: {room_name} - {zone_description}
+    - Actors Present in this location: {actors_present}
+    - Objects Present in this location: {objects_present}
+    - Mechanical Outcome: {mechanical_summary}
+    - Recent Game History: {game_history}
+    - Current Statuses: {statuses}
+    - Current Memories: {memories}
+    - Current Mood/Personality: {personality}
+    - Character quotes: {character_quotes}
+    - Character Qualities (for narrative description of {player_name}):
+    - Gender: {player_gender}
+    - Race: {player_race}
+    - Eyes: {player_eyes}
+    - Hair: {player_hair}
+    - Skin: {player_skin}
+    """
 
-Your Task: Write a 2-3 sentence narrative description of what just happened in the third person with a focus on {player_name}.
-Describe the environment and the character's action and its immediate outcome. Use the character's gender and other qualities naturally in your description.
-"""
+    if actor.is_player == True:
+        prompt_template += """
+        Your Task: Write a 2-3 sentence narrative description of what just happened in the third person with a focus on {player_name}.
+        Describe the environment and the character's action and its immediate outcome. Use the character's gender and other qualities naturally in your description.
+        """
+    else:
+        prompt_template += """
+        Your task is to provide dialogue for a specific actor in the third person. Generate a short, in-character piece of dialogue (1-2 sentences) based on the current context, quotes, and your personality.
+        """
 
     # Format the prompt with all the necessary context
     prompt = prompt_template.format(
@@ -557,6 +497,10 @@ Describe the environment and the character's action and its immediate outcome. U
         mechanical_summary=mechanical_summary,
         player_name=actor.name, # Use actor.name here
         game_history=game_history.get_history_string(),
+        statuses=", ".join(actor.source_data.get('statuses', [])) if actor.source_data.get('statuses') else "none",
+        memories=", ".join(actor.source_data.get('memories', [])) if actor.source_data.get('memories') else "none",
+        personality=", ".join(actor.source_data.get('personality', [])) if actor.source_data.get('personality') else "none",
+        character_quotes=", ".join(actor.source_data.get('quotes', [])) if actor.source_data.get('quotes') else "none",
         player_gender=gender,
         player_race=race,
         player_occupation=occupation,
@@ -565,10 +509,12 @@ Describe the environment and the character's action and its immediate outcome. U
         player_skin=skin
     )
 
-    # Use appropriate headers based on the model chosen
-    headers = OPENROUTER_HEADERS if USE_OPENROUTER_MODEL else LOCAL_HEADERS
-    
+    headers = {"Content-Type": "application/json"}
     payload = {"model": MODEL, "messages": [{"role": "user", "content": prompt}]}
+    
+    if DEBUG:
+        print(f"\n--- LLM Narrative Request Payload ---\n{json.dumps(payload, indent=2)}\n-----------------------------------\n")
+
     try:
         response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
         return response.get("choices", [{}])[0].get("message", {}).get("content", "").strip() or f"LLM (empty response): {mechanical_summary}"
@@ -786,7 +732,7 @@ def main_game_loop():
                     #print(get_llm_story_response(mechanical_result))
                 # NPC/Actor turn
                 else:
-                    print(get_actor_dialogue(current_character, game_history)) # Pass game_history
+                    print(get_llm_response(current_character)) # Pass game_history
 
                 # Check if all players are incapacitated or a game-ending condition is met
                 if all(p.cur_hp <= 0 for p in players):
@@ -803,7 +749,7 @@ def main_game_loop():
             
             # Call get_llm_story_response only if mechanical_result is not None AND doesn't include 'spoke'
             if mechanical_result is not None and 'spoke' not in mechanical_result.lower():
-                print(get_llm_story_response(mechanical_result, current_character))
+                print(get_llm_response(current_character))
 
         print("\n--- Game End ---")
         sys.stdout = original_stdout # Restore stdout
