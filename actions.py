@@ -1,5 +1,69 @@
 # actions.py
-from d6_rules import roll_d6_check, COMBAT_SKILLS, OPPOSED_SKILLS
+from d6_rules import roll_d6_check, COMBAT_SKILLS, OPPOSED_SKILLS, roll_d6_dice
+
+def cast_spell(actor, spell, target, environment, players, actors):
+    """
+    Casts a spell at a target, checking if the actor knows the spell and performing
+    an opposed roll to determine the outcome.
+    """
+    if not spell or not target:
+        return f"ERROR: Spell '{spell}' or target '{target}' not specified for casting."
+
+    spell_lower = spell.lower()
+    target_lower = target.lower()
+
+    # 1. Check if the actor knows the spell
+    known_spells = [s.lower() for s in getattr(actor, 'spells', [])]
+    if spell_lower not in known_spells:
+        return f"{actor.name} does not know the spell '{spell}'."
+
+    # 2. Find the target actor
+    target_actor = next((a for a in players + actors if a.name.lower() == target_lower), None)
+    if not target_actor:
+        return f"Cannot find target '{target}' for the spell."
+
+    # 3. Perform the spell check using 'intellect' as the casting attribute.
+    actor_pips = actor.get_attribute_or_skill_pips('intellect')
+    actor_roll, _ = roll_d6_check(actor_pips, 0)
+
+    # 4. Handle different spells with a match/case statement
+    match spell_lower:
+        case "fireball":
+            # Opposed by the target's dodge skill
+            target_pips = target_actor.get_attribute_or_skill_pips('dodge')
+            target_roll, _ = roll_d6_check(target_pips, 0)
+            if actor_roll > target_roll:
+                damage = 10 + (actor_roll - target_roll) # Base damage + success level
+                damage_message = target_actor.take_damage(damage)
+                return f"{actor.name} hurls a fireball at {target_actor.name}! It hits! {damage_message}"
+            else:
+                return f"{actor.name}'s fireball misses {target_actor.name}."
+
+        case "charm" | "hold person":
+            # Opposed by the target's willpower skill
+            target_pips = target_actor.get_attribute_or_skill_pips('willpower')
+            target_roll, _ = roll_d6_check(target_pips, 0)
+            if actor_roll > target_roll:
+                if spell_lower == "charm":
+                    # In a full implementation, this would change the target's attitude.
+                    return f"{actor.name} successfully charms {target_actor.name}."
+                else: # hold person
+                    # In a full implementation, this would apply a 'held' status effect.
+                    return f"{target_actor.name} is held in place by {actor.name}'s magic!"
+            else:
+                if spell_lower == "charm":
+                    return f"{target_actor.name} resists {actor.name}'s charm spell."
+                else: # hold person
+                    return f"{target_actor.name} breaks free from the magical hold."
+        
+        case "comprehend languages":
+            # This spell typically wouldn't have an opposed roll and would affect the caster.
+            # A full implementation would apply a status or temporary ability.
+            return f"{actor.name} casts Comprehend Languages and can now understand all spoken and written languages for a time."
+
+        case _:
+            return f"The spell '{spell}' is not yet implemented or cannot be targeted in this way."
+
 
 def execute_skill_check(actor, skill, target, environment, players, actors):
     """

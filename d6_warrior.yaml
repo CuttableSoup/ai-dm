@@ -14,6 +14,7 @@ attributes:
 allies: Kael
 attitudes:
 - default: Indifferent
+- Valerius: Loving
 statuses:
 - none
 personality:
@@ -40,7 +41,7 @@ skills:
   firearms: 3
   melee_combat: 3
   search: 3
-  spellcasting: 3
+  willpower: 3
 
 inventory:
 - item: longsword

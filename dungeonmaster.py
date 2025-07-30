@@ -6,7 +6,7 @@ import os
 from datetime import datetime
 from collections import deque # For the GameHistory class
 from d6_rules import *
-from actions import execute_skill_check # <-- IMPORT a new function
+from actions import execute_skill_check, cast_spell # <-- IMPORT the new cast_spell function
 import sys # Needed for stdout redirection in main_game_loop
 import random # Needed for roll_initiative
 import config
@@ -178,20 +178,30 @@ class GameHistory:
 
 
 # --- 3. Discrete Action Functions ---
-# execute_skill_check has been moved to actions.py
+# execute_skill_check and cast_spell are in actions.py
 
 # --- 4. AI Tool Definitions & Execution ---
 available_tools = [
     {   "type": "function", "function": {
-            "name": "execute_skill_check", "description": "Use a skill on an object or another character.",
+            "name": "execute_skill_check", "description": "Use a non-magical skill on an object or another character.",
             "parameters": {"type": "object", "properties": {
-                "skill": {"type": "string", "description": "The name of the skill being used, e.g., 'Search'."},
+                "skill": {"type": "string", "description": "The name of the skill being used, e.g., 'Search', 'Melee Combat'."},
                 "target": {"type": "string", "description": "The target of the skill."}
                 },
                 "required": ["skill", "target"]
             }
         }
     },
+    {   "type": "function", "function": {
+            "name": "cast_spell", "description": "Cast a known spell on a target.",
+            "parameters": {"type": "object", "properties": {
+                "spell": {"type": "string", "description": "The name of the spell being cast from the character's spell list, e.g., 'Fireball'."},
+                "target": {"type": "string", "description": "The target of the spell."}
+                },
+                "required": ["spell", "target"]
+            }
+        }
+    }
 ]
 
 def get_llm_action_and_execute(input_command, actor, game_history_instance):
@@ -224,9 +234,9 @@ def get_llm_action_and_execute(input_command, actor, game_history_instance):
     # Combine all potential targets
     all_potential_targets = list(set(objects_in_room + actors_in_room + doors_in_room))
     
-    # Add trap if present and armed/known
+    # Get trap if present
     current_trap = environment.get_trap_in_room(actor.location['room_id'], actor.location['zone'])
-    if current_trap and (current_trap['status'] == 'armed' or current_trap.get('known') == actor.name):
+    if current_trap:
         all_potential_targets.append(current_trap['name'])
 
     # An explicit, rule-based prompt to guide the AI
@@ -238,6 +248,7 @@ def get_llm_action_and_execute(input_command, actor, game_history_instance):
     **CONTEXT**
     - Actor Name: {actor_name}
     - Actor Skills: {actor_skills}
+    - Actor Spells: {actor_spells}
     - Actors Present: {actors_present}
     - Objects Present: {objects_present}
     - Doors Present: {doors_present}
@@ -245,17 +256,21 @@ def get_llm_action_and_execute(input_command, actor, game_history_instance):
     - Recent Game History: {game_history}
 
     **FUNCTION SELECTION RULES - Follow these steps STRICTLY:**
-    1.  **Analyze the INTENT.** Is the character trying to perform a specific, mechanical action? A mechanical action means using a skill from `{actor_skills}` to directly affect a target from the provided lists (Objects, Actors, Doors, Traps).
-    2.  **IGNORE DIALOGUE AND FLAVOR TEXT.** If the input is just dialogue, an emotional reaction, or a description of an action without a clear target (e.g., "fiddling with a lockpick," "observing the room," "muttering to himself"), it is NOT a mechanical action. In this case, you **MUST NOT** call any function. Return an empty response.
-    3.  **EXECUTE CLEAR ACTIONS.** If the input is a clear command or description of a mechanical action (e.g., "I will try to pick the lock on the chest," "He attacks the goblin," "She tries to study the strange glyphs"), then you **MUST** call the `execute_skill_check` function.
+    1.  **Analyze the INTENT.** Is the character trying to perform a specific, mechanical action?
+    2.  **Check for SPELLCASTING.** If the input mentions casting a spell (e.g., "casts fireball," "uses charm"), and the spell is in the Actor's spell list, you **MUST** call the `cast_spell` function.
+        - The `spell` argument must exactly match a spell from `{actor_spells}`.
+        - The `target` argument must match an item from the lists of present Actors, Objects, etc.
+    3.  **Check for SKILL USE.** If the action is not a spell but involves using a skill (e.g., "attacks with sword," "tries to pick the lock"), you **MUST** call `execute_skill_check`.
         - The `skill` argument must be a relevant skill from `{actor_skills}`.
-        - The `target` argument **MUST** exactly match an item from the lists of present Objects, Actors, Doors, or Traps.
-    4.  **PRIORITY:** It is better to do nothing than to call a function incorrectly. If you are not certain that a mechanical skill is being used on a specific target, do not call a function.
+        - The `target` argument must match an item from the lists.
+    4.  **IGNORE DIALOGUE AND FLAVOR TEXT.** If the input is just dialogue, an emotional reaction, or a description of an action without a clear target (e.g., "fiddling with a lockpick," "observing the room," "muttering to himself"), it is NOT a mechanical action. In this case, you **MUST NOT** call any function. Return an empty response.
+    5.  **PRIORITY:** It is better to do nothing than to call a function incorrectly. If you are not certain, do not call a function.
     """
     prompt = prompt_template.format(
         input_command=input_command,
         actor_name=actor.name,
         actor_skills=list(actor.skills.keys()),
+        actor_spells=getattr(actor, 'spells', []), # Use getattr to safely get spells
         actors_present=actors_in_room,
         objects_present=objects_in_room,
         doors_present=doors_in_room,
@@ -279,7 +294,7 @@ def get_llm_action_and_execute(input_command, actor, game_history_instance):
             
         message = response.get("choices", [{}])[0].get("message", {})
         if not message.get("tool_calls"):
-            # This is now the expected outcome for dialogue or flavor text.
+            # This is the expected outcome for dialogue or flavor text.
             mechanical_result = None
             game_history_instance.add_dialogue(actor.name, input_command) # Log the dialogue
             return mechanical_result
@@ -289,10 +304,14 @@ def get_llm_action_and_execute(input_command, actor, game_history_instance):
         function_name = tool_call['name']
         arguments = json.loads(tool_call['arguments'])
         
+        # Call the appropriate function based on the AI's choice
         if function_name == "execute_skill_check":
-            # Pass the required game state objects to the function
             mechanical_result = execute_skill_check(actor, environment=environment, players=players, actors=actors, **arguments)
-            game_history_instance.add_action(actor.name, f"attempted to use {arguments.get('skill', 'an unknown skill')} on {arguments.get('target', 'an unknown target')}.")
+            game_history_instance.add_action(actor.name, f"attempted to use {arguments.get('skill', 'a skill')} on {arguments.get('target', 'a target')}.")
+            return mechanical_result
+        elif function_name == "cast_spell":
+            mechanical_result = cast_spell(actor, environment=environment, players=players, actors=actors, **arguments)
+            game_history_instance.add_action(actor.name, f"attempted to cast {arguments.get('spell', 'a spell')} on {arguments.get('target', 'a target')}.")
             return mechanical_result
         
         mechanical_result = f"Error: The AI tried to call an unknown function '{function_name}'."
@@ -338,6 +357,7 @@ def get_llm_response(actor):
     - Recent Game History: {game_history}
     - Current Statuses: {statuses}
     - Current Memories: {memories}
+    - Current Attitudes: {attitudes}
     - Current Mood/Personality: {personality}
     - Character quotes: {character_quotes}
     - Character Qualities (for narrative description of {player_name}):
@@ -362,18 +382,39 @@ def get_llm_response(actor):
         4.  Use sensory details (the sound of a lock, the smell of dust, the glint of steel) to immerse the player.
         5.  Keep the tone grounded and cinematic. Avoid overly dramatic or poetic language.
         """
-    else:
+    else: # NPC Turn
         prompt_template += """
         Your task is to determine the next action for the NPC, {player_name}, and express it as simple dialogue OR a clear, direct command.
+
+        **Instructions - Follow these steps:**
+        1.  **First, review the 'Recent Game History'.** If the last entry was dialogue directed at you, your primary goal is to respond directly to that dialogue.
+        2.  **Use your 'Personality' and 'Attitudes' to decide *how* to respond.** (e.g., if you are 'irritable', respond irritably).
+        3.  **Decide on an action.** This can be just talking, or a physical action.
+        4.  **State your turn clearly.** Write a line of dialogue from your perspective, followed by a command if you are taking an action.
         
-        **Instructions:**
-        **Analyze the context:** Consider the NPC's personality, the recent history, and who/what is present.
-            - Write a line or two of dialogue from the NPC's perspective.
-            - Keep the language direct and realistic. Avoid overly theatrical or poetic language.
-            - State the action as a simple, clear command that the game can understand.
-            - The [Skill] MUST be from this list: {actor_skills}.
-            - The [Target] MUST be a person, object, or door from the lists provided in the context.
+        **Example:** If the history says 'Valerius: "Have you seen my sword?"' and your personality is 'helpful', you might say: "I think I saw it over by the table. I'll go check." followed by the action, listed under Skills.
+
+        **CONTEXT FOR YOUR DECISION**
+        - Your Personality: {personality}
+        - Your Current Attitudes: {attitudes}
+        - Recent Game History: {game_history}
+        - Actors Present: {actors_present}
+        - Objects Present: {objects_present}
+        - Your Spells: {actor_spells}
+        - Your Skills: {actor_skills}
         """
+
+    # Format attitudes
+    attitudes_list = actor.source_data.get('attitudes', [])
+    attitudes_str = "none"
+    if attitudes_list:
+        # Format list of dictionaries into a readable string
+        formatted_attitudes = []
+        for attitude_dict in attitudes_list:
+            for key, value in attitude_dict.items():
+                formatted_attitudes.append(f"{key}: {value}")
+        attitudes_str = ", ".join(formatted_attitudes)
+
 
     # Format the prompt with all the necessary context
     prompt = prompt_template.format(
@@ -383,10 +424,12 @@ def get_llm_response(actor):
         objects_present=", ".join(objects_in_room) if objects_in_room else "none",
         mechanical_summary=mechanical_summary,
         actor_skills=list(actor.skills.keys()),
+        actor_spells=getattr(actor, 'spells', []), # Safely get spells
         player_name=actor.name, # Use actor.name here
         game_history=game_history.get_history_string(),
         statuses=", ".join(actor.source_data.get('statuses', [])) if actor.source_data.get('statuses') else "none",
         memories=", ".join(actor.source_data.get('memories', [])) if actor.source_data.get('memories') else "none",
+        attitudes=attitudes_str,
         personality=", ".join(actor.source_data.get('personality', [])) if actor.source_data.get('personality') else "none",
         character_quotes=", ".join(actor.source_data.get('quotes', [])) if actor.source_data.get('quotes') else "none",
         player_gender=gender,
@@ -590,7 +633,6 @@ def main_game_loop():
                     character_action = input(f"{current_character.name}, your action > ").strip()
                     
                     # Step 1: Find all instances of dialogue using re.findall.
-                    # This captures the text *inside* the quotes.
                     dialogue_parts = re.findall(r'["\'](.*?)["\']', character_action)
                     
                     # Step 2: If dialogue was found, log each part.
@@ -599,8 +641,6 @@ def main_game_loop():
                             game_history.add_dialogue(current_character.name, dialogue)
                     
                     # Step 3: Get the pure narration by substituting all dialogue instances with an empty string.
-                    # The pattern now includes the quotes themselves in the removal.
-                    # We also replace multiple spaces with a single space for cleanliness.
                     narration_for_llm = re.sub(r'["\'].*?["\']', '', character_action)
                     narration_for_llm = re.sub(r'\s+', ' ', narration_for_llm).strip()
 
