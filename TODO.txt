@@ -1,0 +1,4 @@
+languages
+combat allies
+spells
+GUI
