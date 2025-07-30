@@ -1,6 +1,7 @@
 import requests
 import json
 import yaml
+import re
 import os
 from datetime import datetime
 from collections import deque # For the GameHistory class
@@ -28,7 +29,6 @@ else:
     MODEL = "local-model/gemma-3-12b"
     LLM_API_URL = "http://localhost:1234/v1/chat/completions"
     LOCAL_HEADERS = {"Content-Type": "application/json"} # Headers for local model
-
 
 SCENARIO_FILE = "scenario.yaml"   # The file containing the game's story and setup
 INVENTORY_FILE = "inventory.yaml" # The file containing all possible items
@@ -230,41 +230,32 @@ def get_llm_action_and_execute(input_command, actor, game_history_instance):
         all_potential_targets.append(current_trap['name'])
 
     # An explicit, rule-based prompt to guide the AI
-    prompt_template = """You are an AI assistant for a text-based game. Your task is to translate an actor's command into a specific function call.
-    Actor Input: '{input_command}'
+    prompt_template = """You are an AI assistant for a text-based game. Your task is to determine if a described action requires a mechanical function call.
+    The input is either a player's direct command or a narrative description of an NPC's action.
+
+    Input: '{input_command}'
 
     **CONTEXT**
     - Actor Name: {actor_name}
     - Actor Skills: {actor_skills}
-    - Current Statuses: {statuses}
-    - Current Memories: {memories}
-    - Current Mood/Personality: {personality}
-    - Character quotes: {character_quotes}
-    - Actors Present (and in the same location as {actor_name}): {actors_present}
-    - Objects Present (in the same location as {actor_name}): {objects_present}
-    - Doors Present (in the same location as {actor_name}): {doors_present}
-    - Traps Present (in the same location as {actor_name}): {traps_present}
+    - Actors Present: {actors_present}
+    - Objects Present: {objects_present}
+    - Doors Present: {doors_present}
+    - Traps Present: {traps_present}
     - Recent Game History: {game_history}
 
-    **FUNCTION SELECTION RULES - Follow these steps:**
-    1.  **Is the command using a skill (like search, lift, investigate, lockpick, disable device) on an object, door, trap or another actor?**
-        - If yes, you **MUST** call `execute_skill_check`.
-        - The `skill` argument should be the skill used (e.g., 'Search', 'Lockpicking', 'Lifting', 'Disable Device'). **Ensure the skill is a valid skill from 'Actor Skills' and is relevant to the command.**
-        - The `target` argument **MUST** be the name of the object, door, trap or actor from the list of 'Objects Present', 'Doors Present', 'Traps Present', or 'Actors Present'. **Ensure the target name exactly matches one of the provided names.**
-    2.  **Is the command purely conversational (e.g., asking a question, making a statement, reacting to dialogue) and does NOT involve using a skill or interacting with an object/door/trap?**
-        - If yes, you **MUST NOT** call any function. Return an empty response, indicating no mechanical action is taken. The dialogue itself is the action.
-
-    Based on these strict rules, select the correct function and parameters.
-    If no suitable function call can be made (because it's dialogue, or an unknown command), return an empty response (no tool call).
+    **FUNCTION SELECTION RULES - Follow these steps STRICTLY:**
+    1.  **Analyze the INTENT.** Is the character trying to perform a specific, mechanical action? A mechanical action means using a skill from `{actor_skills}` to directly affect a target from the provided lists (Objects, Actors, Doors, Traps).
+    2.  **IGNORE DIALOGUE AND FLAVOR TEXT.** If the input is just dialogue, an emotional reaction, or a description of an action without a clear target (e.g., "fiddling with a lockpick," "observing the room," "muttering to himself"), it is NOT a mechanical action. In this case, you **MUST NOT** call any function. Return an empty response.
+    3.  **EXECUTE CLEAR ACTIONS.** If the input is a clear command or description of a mechanical action (e.g., "I will try to pick the lock on the chest," "He attacks the goblin," "She tries to study the strange glyphs"), then you **MUST** call the `execute_skill_check` function.
+        - The `skill` argument must be a relevant skill from `{actor_skills}`.
+        - The `target` argument **MUST** exactly match an item from the lists of present Objects, Actors, Doors, or Traps.
+    4.  **PRIORITY:** It is better to do nothing than to call a function incorrectly. If you are not certain that a mechanical skill is being used on a specific target, do not call a function.
     """
     prompt = prompt_template.format(
         input_command=input_command,
         actor_name=actor.name,
         actor_skills=list(actor.skills.keys()),
-        statuses=", ".join(actor.source_data.get('statuses', [])) if actor.source_data.get('statuses') else "none",
-        memories=", ".join(actor.source_data.get('memories', [])) if actor.source_data.get('memories') else "none",
-        personality=", ".join(actor.source_data.get('personality', [])) if actor.source_data.get('personality') else "none",
-        character_quotes=", ".join(actor.source_data.get('quotes', [])) if actor.source_data.get('quotes') else "none",
         actors_present=actors_in_room,
         objects_present=objects_in_room,
         doors_present=doors_in_room,
@@ -279,14 +270,18 @@ def get_llm_action_and_execute(input_command, actor, game_history_instance):
     
     if DEBUG:
         print(f"\n--- LLM Narrative Request Payload ---\n{json.dumps(payload, indent=2)}\n-----------------------------------\n")
-    
+        
     try:
         response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
-
+        
+        if DEBUG:
+            print(f"\n--- LLM Raw Response ---\n{json.dumps(response, indent=2)}\n------------------------\n")
+            
         message = response.get("choices", [{}])[0].get("message", {})
         if not message.get("tool_calls"):
-            mechanical_result = f"{actor.name} is unable to decide on an action and passes the turn."
-            game_history_instance.add_action(actor.name, "could not decide on an action and passed the turn.")
+            # This is now the expected outcome for dialogue or flavor text.
+            mechanical_result = None
+            game_history_instance.add_dialogue(actor.name, input_command) # Log the dialogue
             return mechanical_result
             
         # Extract the function name and arguments from the AI's response
@@ -355,12 +350,29 @@ def get_llm_response(actor):
 
     if actor.is_player == True:
         prompt_template += """
-        Your Task: Write a 2-3 sentence narrative description of what just happened in the third person with a focus on {player_name}.
-        Describe the environment and the character's action and its immediate outcome. Use the character's gender and other qualities naturally in your description.
+        You are the narrator of a grounded, text-based RPG. Your job is to describe the outcome of the player's action in a vivid and engaging way, like a good Dungeon Master.
+
+        **Factual Outcome:**
+        - **Mechanical Summary:** {mechanical_summary} <-- This is what actually happened. Your narration MUST align perfectly with this result.
+
+        **Your Task:**
+        1.  Write a short (2-3 sentences) narrative description from a third-person perspective focused on {player_name}.
+        2.  Start by briefly describing the character's *attempted action*.
+        3.  Seamlessly weave in the **Mechanical Summary** to describe the final result.
+        4.  Use sensory details (the sound of a lock, the smell of dust, the glint of steel) to immerse the player.
+        5.  Keep the tone grounded and cinematic. Avoid overly dramatic or poetic language.
         """
     else:
         prompt_template += """
-        Your task is to provide dialogue for a specific actor in the third person. Generate a short, in-character piece of dialogue (1-2 sentences) based on the current context, quotes, and your personality.
+        Your task is to determine the next action for the NPC, {player_name}, and express it as simple dialogue OR a clear, direct command.
+        
+        **Instructions:**
+        **Analyze the context:** Consider the NPC's personality, the recent history, and who/what is present.
+            - Write a line or two of dialogue from the NPC's perspective.
+            - Keep the language direct and realistic. Avoid overly theatrical or poetic language.
+            - State the action as a simple, clear command that the game can understand.
+            - The [Skill] MUST be from this list: {actor_skills}.
+            - The [Target] MUST be a person, object, or door from the lists provided in the context.
         """
 
     # Format the prompt with all the necessary context
@@ -370,6 +382,7 @@ def get_llm_response(actor):
         actors_present=", ".join(actors_in_room) if actors_in_room else "none",
         objects_present=", ".join(objects_in_room) if objects_in_room else "none",
         mechanical_summary=mechanical_summary,
+        actor_skills=list(actor.skills.keys()),
         player_name=actor.name, # Use actor.name here
         game_history=game_history.get_history_string(),
         statuses=", ".join(actor.source_data.get('statuses', [])) if actor.source_data.get('statuses') else "none",
@@ -388,11 +401,15 @@ def get_llm_response(actor):
     payload = {"model": MODEL, "messages": [{"role": "user", "content": prompt}]}
     
     if DEBUG:
-        print(f"\n--- LLM Narrative Request Payload ---\n{json.dumps(payload, indent=2)}\n-----------------------------------\n")
+        print(f"\n--- LLM Response Request Payload ---\n{json.dumps(payload, indent=2)}\n-----------------------------------\n")
 
     try:
         response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
-        return response.get("choices", [{}])[0].get("message", {}).get("content", "").strip() or f"LLM (empty response): {mechanical_summary}"
+        
+        if DEBUG:
+            print(f"\n--- LLM Raw Response ---\n{json.dumps(response, indent=2)}\n------------------------\n")
+        
+        return response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
     except Exception as e:
         return f"LLM Error: Could not get narration. {e}"
 
@@ -570,15 +587,39 @@ def main_game_loop():
 
                 # Player turn
                 if current_character.is_player:
-                    player_input = input(f"{current_character.name}, your action > ").strip()
-                    mechanical_result = get_llm_action_and_execute(player_input, current_character, game_history)
+                    character_action = input(f"{current_character.name}, your action > ").strip()
                     
+                    # Step 1: Find all instances of dialogue using re.findall.
+                    # This captures the text *inside* the quotes.
+                    dialogue_parts = re.findall(r'["\'](.*?)["\']', character_action)
+                    
+                    # Step 2: If dialogue was found, log each part.
+                    if dialogue_parts:
+                        for dialogue in dialogue_parts:
+                            game_history.add_dialogue(current_character.name, dialogue)
+                    
+                    # Step 3: Get the pure narration by substituting all dialogue instances with an empty string.
+                    # The pattern now includes the quotes themselves in the removal.
+                    # We also replace multiple spaces with a single space for cleanliness.
+                    narration_for_llm = re.sub(r'["\'].*?["\']', '', character_action)
+                    narration_for_llm = re.sub(r'\s+', ' ', narration_for_llm).strip()
+
+                    # Step 4: Only send the narration to the LLM if any exists.
+                    if narration_for_llm:
+                        mechanical_result = get_llm_action_and_execute(narration_for_llm, current_character, game_history)
+                    else:
+                        mechanical_result = None
+
                     if DEBUG:
                         print(f"Mechanical Outcome: {mechanical_result}")
 
-                # NPC/Actor turn
                 else:
-                    print(get_llm_response(current_character))
+                    # NPC logic can remain the same
+                    character_action = get_llm_response(current_character)
+                    print(character_action)
+                    mechanical_result = get_llm_action_and_execute(character_action, current_character, game_history)
+                    if DEBUG:
+                        print(f"Mechanical Outcome: {mechanical_result}")
 
         print("\n--- Game End ---")
         sys.stdout = original_stdout
