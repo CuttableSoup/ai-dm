@@ -30,7 +30,7 @@ items:
   location: hand
   magazine: 6
   range: 1
-  skill: Firearms
+  skill: firearms
   type: Weapon
   weight: 3
   value: 4
@@ -50,7 +50,7 @@ items:
   target: 1
   location: hand
   range: melee
-  skill: Melee_Combat
+  skill: melee_combat
   type: Weapon
   weight: 5
   value: 3
@@ -70,7 +70,7 @@ items:
   target: 1
   location: hand
   range: melee
-  skill: Brawling
+  skill: brawling
   type: Weapon
   weight: 10
   value: 3

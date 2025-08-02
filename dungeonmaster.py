@@ -32,11 +32,13 @@ else:
 
 SCENARIO_FILE = "scenario.yaml"   # The file containing the game's story and setup
 INVENTORY_FILE = "inventory.yaml" # The file containing all possible items
+SPELLS_FILE = "spells.yaml"       # The file containing all possible spells
 DEBUG = False
 
 # Global game state variables (will be populated by setup_initial_encounter)
 scenario_data = {}
 all_items = {}
+all_spells = {}
 players = []
 actors = []
 mechanical_summary = None
@@ -64,13 +66,28 @@ def load_items(filepath):
         print(f"ERROR loading inventory file {filepath}: {e}")
         return []
 
+def load_spells(filepath):
+    """Loads and processes the spells from the given YAML file."""
+    try:
+        with open(filepath, 'r') as f:
+            spells_list = yaml.safe_load(f)
+            processed_spells = {}
+            for spell_entry in spells_list:
+                for spell_name, spell_data in spell_entry.items():
+                    processed_spells[spell_name.lower()] = spell_data
+            return processed_spells
+    except (FileNotFoundError, yaml.YAMLError) as e:
+        print(f"ERROR loading spells file {filepath}: {e}")
+        return {}
+
 # --- 2. Game Entity and Environment Classes ---
 class Environment:
     """Manages the game world's rooms, objects, and exits."""
-    def __init__(self, scenario_data, all_items):
+    def __init__(self, scenario_data, all_items, all_spells):
         self.rooms = {room['room_id']: room for room in scenario_data.get('environment', {}).get('rooms', [])}
         self.doors = {door['door_id']: door for door in scenario_data.get('environment', {}).get('doors', [])}
         self.all_items = {item['name'].lower(): item for item in all_items} # Store items by lowercased name for easy lookup
+        self.all_spells = all_spells
 
     def get_room_by_id(self, room_id):
         return self.rooms.get(room_id)
@@ -115,6 +132,9 @@ class Environment:
 
     def get_item_details(self, item_name):
         return self.all_items.get(item_name.lower())
+
+    def get_spell_details(self, spell_name):
+        return self.all_spells.get(spell_name.lower())
 
 
 class Actor:
@@ -473,18 +493,19 @@ def setup_initial_encounter():
     Sets up the game by loading the environment and creating characters.
     Populates global players, actors, and environment variables.
     """
-    global players, actors, environment, all_items, game_history
+    global players, actors, environment, all_items, all_spells, game_history
 
     if not load_scenario(SCENARIO_FILE):
         print("Failed to load scenario. Exiting.")
         return False
 
     all_items = load_items(INVENTORY_FILE)
+    all_spells = load_spells(SPELLS_FILE)
     if not all_items:
         print("Failed to load inventory items. Exiting.")
         return False
 
-    environment = Environment(scenario_data, all_items)
+    environment = Environment(scenario_data, all_items, all_spells)
     game_history = GameHistory() # Initialize game history
 
     # Setup Players
