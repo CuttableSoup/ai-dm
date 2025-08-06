@@ -15,6 +15,12 @@ import config
 # Set this to True to use the OpenRouter model, False to use the local model
 USE_OPENROUTER_MODEL = False 
 
+# --- New Feature Switch ---
+# Determines the logic used for NPC turns.
+# False (Default): Two-call approach. More reliable, separates reasoning from execution.
+# True: Single-call approach. More efficient, combines reasoning and execution in one call.
+USE_SINGLE_CALL_NPC_LOGIC = False
+
 if USE_OPENROUTER_MODEL:
     MODEL = "google/gemma-3-12b-it:free"
     LLM_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -224,9 +230,24 @@ available_tools = [
     }
 ]
 
+def execute_function_call(actor, function_name, arguments):
+    """A helper to execute the function call from the LLM's response."""
+    if function_name == "execute_skill_check":
+        mechanical_result = execute_skill_check(actor, environment=environment, players=players, actors=actors, **arguments)
+        game_history.add_action(actor.name, f"attempted to use {arguments.get('skill', 'a skill')} on {arguments.get('target', 'a target')}.")
+        return mechanical_result
+    elif function_name == "cast_spell":
+        mechanical_result = cast_spell(actor, environment=environment, players=players, actors=actors, **arguments)
+        game_history.add_action(actor.name, f"attempted to cast {arguments.get('spell', 'a spell')} on {arguments.get('target', 'a target')}.")
+        return mechanical_result
+    
+    mechanical_result = f"Error: The AI tried to call an unknown function '{function_name}'."
+    game_history.add_action(actor.name, mechanical_result)
+    return mechanical_result
+
 def get_llm_action_and_execute(input_command, actor, game_history_instance):
     """
-    Sends the current game state and player command to the AI model,
+    (TWO-CALL METHOD) Sends the current game state and player command to the AI model,
     which then chooses an action (a function) to execute.
     """
     current_room, current_zone_data = environment.get_current_room_data(actor.location)
@@ -325,27 +346,17 @@ def get_llm_action_and_execute(input_command, actor, game_history_instance):
         arguments = json.loads(tool_call['arguments'])
         
         # Call the appropriate function based on the AI's choice
-        if function_name == "execute_skill_check":
-            mechanical_result = execute_skill_check(actor, environment=environment, players=players, actors=actors, **arguments)
-            game_history_instance.add_action(actor.name, f"attempted to use {arguments.get('skill', 'a skill')} on {arguments.get('target', 'a target')}.")
-            return mechanical_result
-        elif function_name == "cast_spell":
-            mechanical_result = cast_spell(actor, environment=environment, players=players, actors=actors, **arguments)
-            game_history_instance.add_action(actor.name, f"attempted to cast {arguments.get('spell', 'a spell')} on {arguments.get('target', 'a target')}.")
-            return mechanical_result
-        
-        mechanical_result = f"Error: The AI tried to call an unknown function '{function_name}'."
-        game_history_instance.add_action(actor.name, mechanical_result)
-        return mechanical_result
+        return execute_function_call(actor, function_name, arguments)
+
     except Exception as e:
         mechanical_result = f"Error communicating with AI: {e}"
         game_history_instance.add_action(actor.name, mechanical_result)
         return mechanical_result
 
-# --- 5. Narrative LLM ---
+# --- 5. Narrative LLM & NPC Action Generation ---
 def get_llm_response(actor):
     """
-    Generates a narrative summary of the events that just occurred.
+    (TWO-CALL METHOD) Generates a narrative summary for players OR gets an NPC's intended action as text.
     """
     current_room, current_zone_data = environment.get_current_room_data(actor.location) # Use actor.location
 
@@ -460,7 +471,8 @@ def get_llm_response(actor):
         player_skin=skin
     )
 
-    headers = {"Content-Type": "application/json"}
+    # Corrected code
+    headers = OPENROUTER_HEADERS if USE_OPENROUTER_MODEL else LOCAL_HEADERS
     payload = {"model": MODEL, "messages": [{"role": "user", "content": prompt}]}
     
     if DEBUG:
@@ -472,9 +484,106 @@ def get_llm_response(actor):
         if DEBUG:
             print(f"\n--- LLM Raw Response ---\n{json.dumps(response, indent=2)}\n------------------------\n")
         
-        return response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        content = response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        # NEW: Failsafe for silent NPC response
+        if not content and not actor.is_player:
+            return f"{actor.name} stands silently, observing the room."
+        return content
+
     except Exception as e:
         return f"LLM Error: Could not get narration. {e}"
+
+
+def get_llm_npc_action_single_call(actor, game_history_instance):
+    """(SINGLE-CALL METHOD) Generates NPC dialogue and function call in one request."""
+    current_room, current_zone_data = environment.get_current_room_data(actor.location)
+    
+    # Get objects in the current room/zone
+    objects_in_room = []
+    if current_zone_data and 'objects' in current_zone_data:
+        objects_in_room.extend([obj['name'] for obj in current_zone_data['objects']])
+    if current_room and 'objects' in current_room:
+        objects_in_room.extend([obj['name'] for obj in current_room['objects']])
+    
+    # Get actors in the current room/zone (excluding the current actor)
+    actors_in_room = [a.name for a in players + actors if a.location == actor.location and a.name != actor.name]
+
+    # Get doors in the current room's exits
+    doors_in_room = []
+    if current_zone_data and 'exits' in current_zone_data:
+        for exit_data in current_zone_data['exits']:
+            door_ref = exit_data.get('door_ref')
+            if door_ref:
+                door = environment.get_door_by_id(door_ref)
+                if door:
+                    doors_in_room.append(door['name'])
+                    
+    current_trap = environment.get_trap_in_room(actor.location['room_id'], actor.location['zone'])
+    attitudes_list = actor.source_data.get('attitudes', [])
+    attitudes_str = "none"
+    if attitudes_list:
+        formatted_attitudes = [f"{k}: {v}" for d in attitudes_list for k, v in d.items()]
+        attitudes_str = ", ".join(formatted_attitudes)
+
+    prompt_template = """You are an AI Game Master controlling an NPC named {actor_name}. Your task is to determine the NPC's next action, generate their dialogue or a description of the action, AND select the appropriate function to call if a mechanical action is taken.
+
+    **Instructions:**
+    1.  **Review the Context:** Use your Personality, Attitudes, and the Recent Game History to decide on a logical and in-character action.
+    2.  **Generate Narrative:** Write a short line of dialogue or a 1-2 sentence description of the action from the NPC's perspective. This will be shown to the player.
+    3.  **Perform a Mechanical Action (If Necessary):**
+        - If the action is a spell, a skill check, or an attack, you **MUST** call the appropriate function (`cast_spell` or `execute_skill_check`).
+        - The arguments for the function must be chosen from the lists of available targets.
+        - If the action is just talking, observing, or simple movement without a mechanical check, **DO NOT** call any function. Just provide the narrative text.
+
+    **CONTEXT FOR YOUR DECISION**
+    - Your Name: {actor_name}
+    - Your Personality: {personality}
+    - Your Current Attitudes: {attitudes}
+    - Recent Game History: {game_history}
+    - Actors Present: {actors_present}
+    - Objects Present: {objects_present}
+    - Doors Present: {doors_present}
+    - Traps Present: {traps_present}
+    - Your Spells: {actor_spells}
+    - Your Skills: {actor_skills}
+    """
+    prompt = prompt_template.format(
+        actor_name=actor.name,
+        personality=", ".join(actor.source_data.get('personality', [])) or "none",
+        attitudes=attitudes_str,
+        game_history=game_history_instance.get_history_string(),
+        actors_present=actors_in_room,
+        objects_present=objects_in_room,
+        doors_present=doors_in_room,
+        traps_present=[current_trap['name']] if current_trap else [],
+        actor_spells=getattr(actor, 'spells', []),
+        actor_skills=list(actor.skills.keys())
+    )
+    headers = OPENROUTER_HEADERS if USE_OPENROUTER_MODEL else LOCAL_HEADERS
+    payload = {"model": MODEL, "messages": [{"role": "user", "content": prompt}], "tools": available_tools, "tool_choice": "auto"}
+    try:
+        response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
+        message = response.get("choices", [{}])[0].get("message", {})
+        
+        # Print the narrative/dialogue part
+        npc_narrative = message.get("content", "").strip()
+        if npc_narrative:
+            print(npc_narrative)
+            game_history_instance.add_dialogue(actor.name, npc_narrative)
+        # NEW: Failsafe for silent NPC response
+        elif not message.get("tool_calls"):
+             print(f"{actor.name} stands silently, observing the room.")
+
+
+        # Execute the mechanical/tool part
+        if not message.get("tool_calls"):
+            return None # No mechanical action was taken
+        
+        tool_call = message['tool_calls'][0]['function']
+        return execute_function_call(actor, tool_call['name'], json.loads(tool_call['arguments']))
+
+    except Exception as e:
+        return f"Error communicating with AI: {e}"
 
 # --- 6. Initial Game Setup ---
 def load_scenario(filepath):
@@ -608,6 +717,7 @@ def main_game_loop():
 
         # Roll initiative to determine turn order
         turn_order = roll_initiative()
+        
         if DEBUG:
             print("\n--- Initiative Order ---")
             for i, combatant in enumerate(turn_order):
@@ -615,17 +725,14 @@ def main_game_loop():
 
         while game_active:
             turn_count += 1
-            
-            if DEBUG:
-                print(f"\n--- Turn {turn_count} ---")
+            print(f"\n--- Turn {turn_count} ---")
 
             for current_character in turn_order:
                 if current_character.cur_hp <= 0:
                     print(f"{current_character.name} is unconscious and cannot act.")
                     continue
                 
-                if DEBUG:
-                    print(f"\n{current_character.name}'s turn.")
+                print(f"\n>> {current_character.name}'s Turn <<")
                 current_room, current_zone_data = environment.get_current_room_data(current_character.location)
                 
                 if not current_room:
@@ -635,52 +742,44 @@ def main_game_loop():
                 if DEBUG:
                     print(f"Location: {current_room['name']} (Zone {current_character.location['zone']}) - {current_zone_data['description']}")
                 
-                # List objects in the current zone
-                objects_in_current_zone = current_zone_data.get('objects', [])
-                if DEBUG:
-                    if objects_in_current_zone:
-                        print(f"Objects nearby: {[obj['name'] for obj in objects_in_current_zone]}")
-                
-                # Check for armed traps in the current zone
-                current_trap = environment.get_trap_in_room(current_character.location['room_id'], current_character.location['zone'])
-                if DEBUG:
-                    if current_trap and current_trap['status'] == 'armed' and current_trap.get('known') != current_character.name:
-                        print(f"WARNING: An unknown trap is armed in this zone! ({current_trap['name']})")
-                    elif current_trap and current_trap['status'] == 'armed' and current_trap.get('known') == current_character.name:
-                        print(f"You know there is an armed {current_trap['name']} here.")
-
                 # Player turn
                 if current_character.is_player:
                     character_action = input(f"{current_character.name}, your action > ").strip()
                     
-                    # Step 1: Find all instances of dialogue using re.findall.
                     dialogue_parts = re.findall(r'["\'](.*?)["\']', character_action)
-                    
-                    # Step 2: If dialogue was found, log each part.
                     if dialogue_parts:
                         for dialogue in dialogue_parts:
                             game_history.add_dialogue(current_character.name, dialogue)
                     
-                    # Step 3: Get the pure narration by substituting all dialogue instances with an empty string.
-                    narration_for_llm = re.sub(r'["\'].*?["\']', '', character_action)
-                    narration_for_llm = re.sub(r'\s+', ' ', narration_for_llm).strip()
+                    narration_for_llm = re.sub(r'["\'].*?["\']', '', character_action).strip()
 
-                    # Step 4: Only send the narration to the LLM if any exists.
+                    mechanical_result = None
                     if narration_for_llm:
                         mechanical_result = get_llm_action_and_execute(narration_for_llm, current_character, game_history)
+                    
+                    # FIXED: Generate narrative feedback for the player's action
+                    global mechanical_summary
+                    mechanical_summary = mechanical_result
+                    narrative_response = get_llm_response(current_character)
+                    print(narrative_response)
+
+                    if DEBUG:
+                        print(f"Mechanical Outcome: {mechanical_result}")
+
+                else: # NPC Turn
+                    # NPC Turn Logic with switch
+                    if USE_SINGLE_CALL_NPC_LOGIC:
+                        # New, efficient single-call method
+                        mechanical_result = get_llm_npc_action_single_call(current_character, game_history)
+                        if DEBUG:
+                            print(f"Mechanical Outcome: {mechanical_result}")
                     else:
-                        mechanical_result = None
-
-                    if DEBUG:
-                        print(f"Mechanical Outcome: {mechanical_result}")
-
-                else:
-                    # NPC logic can remain the same
-                    character_action = get_llm_response(current_character)
-                    print(character_action)
-                    mechanical_result = get_llm_action_and_execute(character_action, current_character, game_history)
-                    if DEBUG:
-                        print(f"Mechanical Outcome: {mechanical_result}")
+                        # Original, reliable two-call method
+                        character_action = get_llm_response(current_character)
+                        print(character_action)
+                        mechanical_result = get_llm_action_and_execute(character_action, current_character, game_history)
+                        if DEBUG:
+                            print(f"Mechanical Outcome: {mechanical_result}")
 
         print("\n--- Game End ---")
         sys.stdout = original_stdout
