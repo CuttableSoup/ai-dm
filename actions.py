@@ -97,69 +97,11 @@ def execute_skill_check(actor, skill, target, environment, players, actors):
 
     # Use a match/case statement to handle different skills
     match skill_lower:
-        case "lockpicking" | "demolitions" | "security" | "technology":
-            target_entity = target_door or target_object
-            if not target_entity:
-                return f"Could not find '{target}' to use {skill} on."
 
-            action_found = False
-            for action in target_entity.get('actions', []):
-                if action['skill'].lower() == skill_lower:
-                    action_found = True
-                    difficulty = action.get('difficulty', 0)
-                    actor_pips = actor.get_attribute_or_skill_pips(skill)
-                    success_level, _ = roll_d6_check(actor_pips, difficulty)
-
-                    if success_level > 0:
-                        outcome = action.get('pass', 'success')
-                        if outcome == 'open':
-                            target_entity['status'] = 'open'
-                            return f"{actor.name} successfully used {skill} on the {target}. The {target_entity['name']} is now open."
-                        elif outcome == 'disarm' and target_trap:
-                            target_trap['status'] = 'disarmed'
-                            return f"{actor.name} successfully disarmed the {target_trap['name']}."
-                        return f"{actor.name} successfully used {skill} on the {target}. {outcome}"
-                    else:
-                        outcome = action.get('fail', 'failure')
-                        if outcome == 'jam':
-                            target_entity['status'] = 'jammed'
-                            return f"{actor.name} failed to use {skill} on the {target}. The {target_entity['name']} is now jammed."
-                        elif outcome == 'attack' and target_trap and target_trap['status'] == 'armed':
-                            damage = roll_d6_dice(target_trap.get('damage', 0))
-                            target_trap['status'] = 'sprung'
-                            return f"The {target_trap['name']} springs, attacking {actor.name}! {actor.take_damage(damage)}"
-                        return f"{actor.name} failed to use {skill} on the {target}. {outcome}"
-            
-            if not action_found:
-                return f"{actor.name} cannot use {skill} on the {target}."
-
-        case "search" | "investigation":
-            if target_trap and target_trap['status'] == 'armed':
-                difficulty = target_trap.get('difficulty', 10)
-                actor_pips = actor.get_attribute_or_skill_pips(skill_lower)
-                success_level, _ = roll_d6_check(actor_pips, difficulty)
-                if success_level > 0:
-                    target_trap['known'] = actor.name
-                    return f"{actor.name} discovers the {target_trap['name']}!"
-                else:
-                    return f"{actor.name} searches the area but doesn't find anything unusual."
-            return f"{actor.name} searches around, but finds nothing of note."
-
-        case "lifting":
-            if not target_object:
-                return f"There is no '{target}' to lift."
-            
-            difficulty = target_object.get('lift_difficulty', 20) # Example difficulty
-            actor_pips = actor.get_attribute_or_skill_pips('lifting')
-            success_level, _ = roll_d6_check(actor_pips, difficulty)
-
-            if success_level > 0:
-                # This would need more logic for what happens when an object is lifted
-                return f"{actor.name} successfully lifts the {target}!"
-            else:
-                return f"{actor.name} strains but cannot lift the {target}."
-
-        case skill if skill in COMBAT_SKILLS:
+        case "athletics":
+            return
+        
+        case "melee":
             if not target_actor:
                 return f"Cannot find '{target}' to attack."
             if target_actor == actor:
@@ -190,8 +132,86 @@ def execute_skill_check(actor, skill, target, environment, players, actors):
                 return f"{actor.name}'s {skill} attack with {equipped_weapon['name']} hits {target_actor.name}! {damage_message}"
             else:
                 return f"{actor.name}'s {skill} attack misses {target_actor.name}."
-
-        case "charm" | "con" | "intimidation" | "persuasion":
+        
+        case "throwing":
+            return
+        
+        case "fortitude":
+            return
+        
+        case "strength":
+            return
+        
+        case "acrobatics":
+            return
+        
+        case "fly":
+            return
+        
+        case "trickery":
+            return
+        
+        case "stealth":
+            return
+        
+        case "dodge":
+            return
+        
+        case "missiles":
+            return
+        
+        case "appraise":
+            return
+        
+        case "linguistics":
+            return
+        
+        case "spellcraft":
+            return
+        
+        case "navigation":
+            return
+        
+        case "technology":
+            return
+        
+        case "law":
+            return
+        
+        case "business":
+            return
+        
+        case "cultures":
+            return
+        
+        case "medicine":
+            return
+        
+        case "survival":
+            return
+        
+        case "willpower":
+            return
+        
+        case "miracles":
+            return
+        
+        case "artistry":
+            return
+        
+        case "forgery":
+            return
+        
+        case "gambling":
+            return
+        
+        case "streetwise":
+            return
+        
+        case "observation":
+            return
+        
+        case "charisma":
             if not target_actor:
                 return f"Cannot find '{target}' to use {skill} on."
             
@@ -207,6 +227,21 @@ def execute_skill_check(actor, skill, target, environment, players, actors):
                 return f"{actor.name} successfully uses {skill} on {target_actor.name}."
             else:
                 return f"{target_actor.name} resists {actor.name}'s attempt at {skill}."
+        
+        case "deception":
+            return
+        
+        case "disguise":
+            return
+        
+        case "husbandry":
+            return
+        
+        case "intimidation":
+            return
+        
+        case "psionics":
+            return
 
         case _:
             # Default case for unhandled skills

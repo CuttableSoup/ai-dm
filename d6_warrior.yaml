@@ -4,11 +4,10 @@ cur_hp: 30
 exp: 50
 
 attributes:
-  agility: 9
-  coordination: 9
-  intellect: 9
-  perception: 9
   physique: 9
+  dexterity: 11
+  intelligence: 10
+  wisdom: 10
   presence: 9
 
 allies: Kael
@@ -38,9 +37,9 @@ qualities:
 
 skills:
   dodge: 3
-  firearms: 3
-  melee_combat: 3
-  search: 3
+  missiles: 3
+  melee: 3
+  observation: 3
   willpower: 3
 
 inventory:

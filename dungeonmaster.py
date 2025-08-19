@@ -205,7 +205,7 @@ available_tools = [
     {   "type": "function", "function": {
             "name": "execute_skill_check", "description": "Use a non-magical skill on an object or another character.",
             "parameters": {"type": "object", "properties": {
-                "skill": {"type": "string", "description": "The name of the skill being used, e.g., 'Search', 'Melee Combat'."},
+                "skill": {"type": "string", "description": "The name of the skill being used, e.g., 'Search', 'Melee'."},
                 "target": {"type": "string", "description": "The target of the skill."}
                 },
                 "required": ["skill", "target"]

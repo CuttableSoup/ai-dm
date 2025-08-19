@@ -20,11 +20,11 @@ environment:
       status: locked
       description: A sturdy wooden door, leading deeper into the shrine.
       actions:
-        - skill: lifting
+        - skill: strength
           difficulty: 10
           pass: open
           fail: nothing
-        - skill: lockpicking
+        - skill: trickery
           difficulty: 10
           pass: open
           fail: jam
@@ -38,7 +38,7 @@ environment:
           - name: Dusty Floor
             description: The floor is covered in thick dust.
             actions:
-              - skill: tracking
+              - skill: survival
                 difficulty: 10
                 pass: "You find footprints, you recognize them as orc tracks."
                 fail: nothing
@@ -52,11 +52,11 @@ environment:
           damage: 9
           effect: physical
           actions:
-            - skill: search
+            - skill: observation
               difficulty: 10
               pass: known
               fail: attack
-            - skill: disable device
+            - skill: trickery
               difficulty: 10
               pass: disarm
               fail: attack
@@ -76,7 +76,7 @@ environment:
           - name: Chest
             description: A wooden chest
             actions:
-              - skill: lockpicking
+              - skill: trickery
                 difficulty: 10
                 pass: open
                 fail: jam

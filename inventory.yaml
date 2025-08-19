@@ -15,7 +15,7 @@ items:
   target: 1
   location: hand
   range: 0
-  skill: brawling
+  skill: melee
   weight: 0
   type: weapon
   value: 3
@@ -50,7 +50,7 @@ items:
   target: 1
   location: hand
   range: melee
-  skill: melee_combat
+  skill: melee
   type: Weapon
   weight: 5
   value: 3
@@ -70,7 +70,7 @@ items:
   target: 1
   location: hand
   range: melee
-  skill: brawling
+  skill: melee
   type: Weapon
   weight: 10
   value: 3

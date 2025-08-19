@@ -4,11 +4,10 @@ cur_hp: 25
 exp: 50
 
 attributes:
-  agility: 11
-  coordination: 10
-  intellect: 9
-  perception: 10
-  physique: 8
+  physique: 9
+  dexterity: 11
+  intelligence: 10
+  wisdom: 10
   presence: 9
 
 allies: Valerius
@@ -38,10 +37,9 @@ qualities:
 
 skills:
   stealth: 4
-  lockpicking: 4
-  sleight_of_hand: 3
+  trickery: 4
   acrobatics: 3
-  con: 3
+  charisma: 3
   spellcasting: 3
 
 inventory:
