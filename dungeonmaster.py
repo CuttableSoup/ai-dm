@@ -33,7 +33,7 @@ else:
 SCENARIO_FILE = "scenario.yaml"   # The file containing the game's story and setup
 INVENTORY_FILE = "inventory.yaml" # The file containing all possible items
 SPELLS_FILE = "spells.yaml"       # The file containing all possible spells
-DEBUG = False
+DEBUG = True
 
 # Global game state variables (will be populated by setup_initial_encounter)
 scenario_data = {}
@@ -205,7 +205,7 @@ available_tools = [
     {   "type": "function", "function": {
             "name": "execute_skill_check", "description": "Use a non-magical skill on an object or another character.",
             "parameters": {"type": "object", "properties": {
-                "skill": {"type": "string", "description": "The name of the skill being used, e.g., 'Search', 'Melee'."},
+                "skill": {"type": "string", "description": "The name of the skill being used."},
                 "target": {"type": "string", "description": "The target of the skill."}
                 },
                 "required": ["skill", "target"]
@@ -215,7 +215,7 @@ available_tools = [
     {   "type": "function", "function": {
             "name": "cast_spell", "description": "Cast a known spell on a target.",
             "parameters": {"type": "object", "properties": {
-                "spell": {"type": "string", "description": "The name of the spell being cast from the character's spell list, e.g., 'Fireball'."},
+                "spell": {"type": "string", "description": "The name of the spell being cast from the character's spell list."},
                 "target": {"type": "string", "description": "The target of the spell."}
                 },
                 "required": ["spell", "target"]
@@ -560,19 +560,22 @@ def get_llm_npc_action_single_call(actor, game_history_instance):
     )
     headers = OPENROUTER_HEADERS if USE_OPENROUTER_MODEL else LOCAL_HEADERS
     payload = {"model": MODEL, "messages": [{"role": "user", "content": prompt}], "tools": available_tools, "tool_choice": "auto"}
+    
+    if DEBUG:
+        print(f"\n--- LLM Narrative Request Payload ---\n{json.dumps(payload, indent=2)}\n-----------------------------------\n")
+        
     try:
         response = requests.post(LLM_API_URL, headers=headers, json=payload, timeout=30).json()
         message = response.get("choices", [{}])[0].get("message", {})
+        
+        if DEBUG:
+            print(f"\n--- LLM Raw Response ---\n{json.dumps(response, indent=2)}\n------------------------\n")
         
         # Print the narrative/dialogue part
         npc_narrative = message.get("content", "").strip()
         if npc_narrative:
             print(npc_narrative)
             game_history_instance.add_dialogue(actor.name, npc_narrative)
-        # NEW: Failsafe for silent NPC response
-        elif not message.get("tool_calls"):
-             print(f"{actor.name} stands silently, observing the room.")
-
 
         # Execute the mechanical/tool part
         if not message.get("tool_calls"):
@@ -645,14 +648,13 @@ def setup_initial_encounter():
 def roll_initiative():
     """
     Rolls for initiative for all characters in the room. Returns a list of characters in initiative order.
-    For simplicity, a basic roll (e.g., d6 + Perception attribute pips) for now.
     """
     all_combatants = players + actors
     initiative_rolls = []
     for combatant in all_combatants:
-        # A simple initiative: roll 1d6 + Perception pips (Perception * 3)
-        perception_pips = combatant.get_attribute_or_skill_pips('perception')
-        initiative_score = roll_d6_dice(perception_pips) + random.randint(1, 6)
+        dexterity_pips = combatant.get_attribute_or_skill_pips('dexterity')
+        wisdom_pips = combatant.get_attribute_or_skill_pips('wisdom')
+        initiative_score = roll_d6_dice(dexterity_pips) + roll_d6_dice(wisdom_pips)
         initiative_rolls.append((initiative_score, combatant))
     
     # Sort in descending order of initiative score
@@ -771,7 +773,7 @@ def main_game_loop():
                     
                     # Step 3: Get the pure narration by substituting all dialogue instances with an empty string.
                     narration_for_llm = re.sub(r'["\'].*?["\']', '', character_action)
-                    narration_for_llm = re.sub(r'\s+', ' ', narration_for_llm).strip()
+                    narration_for_llm = re.sub(r'\s+', ' ', narration_for_llm).strip() 
 
                     # Step 4: Only send the narration to the LLM if any exists.
                     if narration_for_llm:
@@ -783,10 +785,8 @@ def main_game_loop():
                         print(f"Mechanical Outcome: {mechanical_result}")
 
                 else:
-                    # NPC logic can remain the same
-                    character_action = get_llm_response(current_character)
-                    print(character_action)
-                    mechanical_result = get_llm_action_and_execute(character_action, current_character, game_history)
+                    # NPC logic uses the single-call method
+                    mechanical_result = get_llm_npc_action_single_call(current_character, game_history)
                     if DEBUG:
                         print(f"Mechanical Outcome: {mechanical_result}")
 

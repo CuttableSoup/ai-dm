@@ -209,7 +209,22 @@ def execute_skill_check(actor, skill, target, environment, players, actors):
             return
         
         case "observation":
-            return
+            if target_object:
+                # Perform an observation check against the object's observation_dc
+                dc = target_object.get('observation_dc', 10) # Default DC is 10
+                actor_pips = actor.get_attribute_or_skill_pips('observation')
+                actor_roll = roll_d6_check(actor_pips, dc)
+
+                if actor_roll >= dc:
+                    return f"{actor.name} observes {target_object['name']} closely: {target_object['description']}"
+                else:
+                    return f"{actor.name} doesn't notice anything unusual about {target_object['name']}."
+            elif target_actor:
+                # Opposed observation vs. stealth/deception
+                # This is a placeholder for more complex social observation
+                return f"{actor.name} is observing {target_actor.name}."
+            else:
+                return f"{actor.name} observes the area, but doesn't focus on anything in particular."
         
         case "charisma":
             if not target_actor:

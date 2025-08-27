@@ -5,9 +5,9 @@ exp: 50
 
 attributes:
   physique: 9
-  dexterity: 11
+  dexterity: 21
   intelligence: 10
-  wisdom: 10
+  wisdom: 20
   presence: 9
 
 allies: Valerius
@@ -41,6 +41,7 @@ skills:
   acrobatics: 3
   charisma: 3
   spellcasting: 3
+  observation: 3
 
 inventory:
   - item: short sword
