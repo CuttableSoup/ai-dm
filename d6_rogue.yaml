@@ -13,6 +13,7 @@ attributes:
 allies: Valerius
 attitudes:
   - default: indifferent
+  - Valerius: loving
 statuses:
   - none
 personality:
@@ -39,7 +40,6 @@ skills:
   stealth: 4
   trickery: 4
   acrobatics: 3
-  charisma: 3
   spellcasting: 3
   observation: 3
 

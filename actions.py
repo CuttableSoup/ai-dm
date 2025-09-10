@@ -10,72 +10,6 @@ def get_equipped_weapon(actor, skill_name, environment):
                 return item_details
     return None
 
-def cast_spell(actor, spell, target, environment, players, actors):
-    """
-    Casts a spell at a target, checking if the actor knows the spell and performing
-    an opposed roll based on data from spells.yaml.
-    """
-    if not spell or not target:
-        return f"ERROR: Spell '{spell}' or target '{target}' not specified for casting."
-
-    spell_lower = spell.lower()
-    target_lower = target.lower()
-
-    # 1. Check if the actor knows the spell
-    known_spells = [s.lower() for s in getattr(actor, 'spells', [])]
-    if spell_lower not in known_spells:
-        return f"{actor.name} does not know the spell '{spell}'."
-
-    # 1a. Get spell details from the environment (loaded from spells.yaml)
-    spell_details = environment.get_spell_details(spell_lower)
-    if not spell_details:
-        return f"Error: The spell '{spell}' is known by {actor.name} but has no definition in the game files."
-
-    # 2. Find the target actor (if applicable)
-    target_actor = next((a for a in players + actors if a.name.lower() == target_lower), None)
-    
-    # 3. Perform the spell check using 'intellect'
-    actor_pips = actor.get_attribute_or_skill_pips('intellect')
-    actor_roll, _ = roll_d6_check(actor_pips, 0)
-    
-    # 4. Handle different spells based on their effect from yaml
-    effect = spell_details.get('effect')
-    
-    match effect:
-        case "fire":  # For Fireball
-            if not target_actor: return f"Cannot find target '{target}' for the spell."
-            target_pips = target_actor.get_attribute_or_skill_pips('dodge')
-            target_roll, _ = roll_d6_check(target_pips, 0)
-            if actor_roll > target_roll:
-                base_damage = spell_details.get('value', 0)
-                damage = base_damage + (actor_roll - target_roll)
-                damage_message = target_actor.take_damage(damage)
-                return f"{actor.name} hurls a fireball at {target_actor.name}! It hits! {damage_message}"
-            else:
-                return f"{actor.name}'s fireball misses {target_actor.name}."
-
-        case "charm" | "stun":  # For Charm and Hold Person
-            if not target_actor: return f"Cannot find target '{target}' for the spell."
-            target_pips = target_actor.get_attribute_or_skill_pips('willpower')
-            target_roll, _ = roll_d6_check(target_pips, 0)
-            if actor_roll > target_roll:
-                if effect == "charm":
-                    return f"{actor.name} successfully charms {target_actor.name}."
-                else:  # stun (Hold Person)
-                    return f"{target_actor.name} is held in place by {actor.name}'s magic!"
-            else:
-                if effect == "charm":
-                    return f"{target_actor.name} resists {actor.name}'s charm spell."
-                else:  # stun (Hold Person)
-                    return f"{target_actor.name} breaks free from the magical hold."
-        
-        case "language":  # For Comprehend Languages
-            # This spell affects the caster and doesn't require a target actor.
-            return f"{actor.name} casts {spell} and can now understand all spoken and written languages for a time."
-
-        case _:
-            return f"The spell '{spell}' with effect '{effect}' is not yet implemented or cannot be targeted in this way."
-
 
 def execute_skill_check(actor, skill, target, environment, players, actors):
     """
@@ -221,7 +155,6 @@ def execute_skill_check(actor, skill, target, environment, players, actors):
                     return f"{actor.name} doesn't notice anything unusual about {target_object['name']}."
             elif target_actor:
                 # Opposed observation vs. stealth/deception
-                # This is a placeholder for more complex social observation
                 return f"{actor.name} is observing {target_actor.name}."
             else:
                 return f"{actor.name} observes the area, but doesn't focus on anything in particular."
@@ -234,14 +167,15 @@ def execute_skill_check(actor, skill, target, environment, players, actors):
             actor_pips = actor.get_attribute_or_skill_pips(skill_lower)
             target_pips = target_actor.get_attribute_or_skill_pips('willpower')
             
-            actor_roll, _ = roll_d6_check(actor_pips, 0)
-            target_roll, _ = roll_d6_check(target_pips, 0)
+            actor_roll = roll_d6_check(actor_pips, 0)
+            target_roll = roll_d6_check(target_pips, 0)
 
             if actor_roll > target_roll:
                 # This would need more complex logic to change an NPC's state (e.g., disposition)
                 return f"{actor.name} successfully uses {skill} on {target_actor.name}."
             else:
                 return f"{target_actor.name} resists {actor.name}'s attempt at {skill}."
+
         
         case "deception":
             return
