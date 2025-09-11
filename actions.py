@@ -11,6 +11,7 @@ def get_equipped_weapon(actor, skill_name, environment):
     return None
 
 
+
 def execute_skill_check(actor, skill, target, environment, players, actors):
     """
     Performs a general skill check against a target (object, trap, or another actor)
@@ -23,7 +24,6 @@ def execute_skill_check(actor, skill, target, environment, players, actors):
     target_lower = target.lower()
 
     # Find the target entity (object, door, trap, or actor)
-    current_room, current_zone_data = environment.get_current_room_data(actor.location)
     target_object = environment.get_object_in_room(actor.location['room_id'], target_lower)
     target_door = next((d for d in environment.doors.values() if d['name'].lower() == target_lower), None)
     target_trap = environment.get_trap_in_room(actor.location['room_id'], actor.location['zone'])
@@ -32,9 +32,6 @@ def execute_skill_check(actor, skill, target, environment, players, actors):
     # Use a match/case statement to handle different skills
     match skill_lower:
 
-        case "athletics":
-            return
-        
         case "melee":
             if not target_actor:
                 return f"Cannot find '{target}' to attack."
@@ -44,13 +41,13 @@ def execute_skill_check(actor, skill, target, environment, players, actors):
             # Opposed roll logic
             opposing_skills = OPPOSED_SKILLS.get(skill_lower, ['dodge'])
             actor_pips = actor.get_attribute_or_skill_pips(skill_lower)
-            actor_roll, _ = roll_d6_check(actor_pips, 0)
+            actor_roll, _ = roll_d6_check(actor_pips, 0) # We only need the roll total here
 
             # Target opposes the roll
             highest_opposition_roll = 0
             for opposing_skill in opposing_skills:
                 target_pips = target_actor.get_attribute_or_skill_pips(opposing_skill)
-                target_roll, _ = roll_d6_check(target_pips, 0)
+                target_roll, _ = roll_d6_check(target_pips, 0) # And here
                 if target_roll > highest_opposition_roll:
                     highest_opposition_roll = target_roll
             
@@ -66,6 +63,44 @@ def execute_skill_check(actor, skill, target, environment, players, actors):
                 return f"{actor.name}'s {skill} attack with {equipped_weapon['name']} hits {target_actor.name}! {damage_message}"
             else:
                 return f"{actor.name}'s {skill} attack misses {target_actor.name}."
+        
+        case "observation":
+            if target_object:
+                # Perform an observation check against the object's observation_dc
+                dc = getattr(target_object, 'observation_dc', 10) # Default DC is 10
+                actor_pips = actor.get_attribute_or_skill_pips('observation')
+                # We can now use the 'success' boolean directly from the check
+                _, success = roll_d6_check(actor_pips, dc)
+
+                if success:
+                    # Access attributes directly from the Object instance
+                    return f"{actor.name} observes {target_object.name} closely: {target_object.description}"
+                else:
+                    return f"{actor.name} doesn't notice anything unusual about {target_object.name}."
+            elif target_actor:
+                return f"{actor.name} is observing {target_actor.name}."
+            else:
+                return f"{actor.name} observes the area, but doesn't focus on anything in particular."
+        
+        case "charisma":
+            if not target_actor:
+                return f"Cannot find '{target}' to use {skill} on."
+            
+            # Opposed willpower check
+            actor_pips = actor.get_attribute_or_skill_pips(skill_lower)
+            target_pips = target_actor.get_attribute_or_skill_pips('willpower')
+            
+            actor_roll, _ = roll_d6_check(actor_pips, 0) # Only need the roll total
+            target_roll, _ = roll_d6_check(target_pips, 0) # And here
+
+            if actor_roll > target_roll:
+                # This would need more complex logic to change an NPC's state (e.g., disposition)
+                return f"{actor.name} successfully uses {skill} on {target_actor.name}."
+            else:
+                return f"{target_actor.name} resists {actor.name}'s attempt at {skill}."
+
+        case "athletics":
+            return
         
         case "throwing":
             return
@@ -141,41 +176,6 @@ def execute_skill_check(actor, skill, target, environment, players, actors):
         
         case "streetwise":
             return
-        
-        case "observation":
-            if target_object:
-                # Perform an observation check against the object's observation_dc
-                dc = target_object.get('observation_dc', 10) # Default DC is 10
-                actor_pips = actor.get_attribute_or_skill_pips('observation')
-                actor_roll = roll_d6_check(actor_pips, dc)
-
-                if actor_roll >= dc:
-                    return f"{actor.name} observes {target_object['name']} closely: {target_object['description']}"
-                else:
-                    return f"{actor.name} doesn't notice anything unusual about {target_object['name']}."
-            elif target_actor:
-                # Opposed observation vs. stealth/deception
-                return f"{actor.name} is observing {target_actor.name}."
-            else:
-                return f"{actor.name} observes the area, but doesn't focus on anything in particular."
-        
-        case "charisma":
-            if not target_actor:
-                return f"Cannot find '{target}' to use {skill} on."
-            
-            # Opposed willpower check
-            actor_pips = actor.get_attribute_or_skill_pips(skill_lower)
-            target_pips = target_actor.get_attribute_or_skill_pips('willpower')
-            
-            actor_roll = roll_d6_check(actor_pips, 0)
-            target_roll = roll_d6_check(target_pips, 0)
-
-            if actor_roll > target_roll:
-                # This would need more complex logic to change an NPC's state (e.g., disposition)
-                return f"{actor.name} successfully uses {skill} on {target_actor.name}."
-            else:
-                return f"{target_actor.name} resists {actor.name}'s attempt at {skill}."
-
         
         case "deception":
             return

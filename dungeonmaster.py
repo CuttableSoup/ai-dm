@@ -1,3 +1,4 @@
+# dungeonmaster.py
 import requests
 import json
 import yaml
@@ -7,45 +8,43 @@ from datetime import datetime
 from d6_rules import *
 from llm_calls import player_action, npc_action, narration
 from classes import Environment, Actor, GameHistory
-import sys # Needed for stdout redirection in main_game_loop
-import random # Needed for roll_initiative
+import sys 
+import random 
 import config
 
 # --- Model Configuration ---
-# Set this to True to use the OpenRouter model, False to use the local model
 USE_OPENROUTER_MODEL = False 
 
 if USE_OPENROUTER_MODEL:
     MODEL = "google/gemma-3-12b-it:free"
     LLM_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-    OPENROUTER_API_KEY = config.OPENROUTER_API_KEY # Get the API key from config.py
-    # OpenRouter requires a Referer or X-Title header. For local development, a placeholder is fine.
+    OPENROUTER_API_KEY = config.OPENROUTER_API_KEY
     HEADERS = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "HTTP-Referer": "http://localhost:8000" # You can replace this with your actual app URL if deployed
+        "HTTP-Referer": "http://localhost:8000"
     }
 else:
     MODEL = "local-model/gemma-3-12b"
     LLM_API_URL = "http://localhost:1234/v1/chat/completions"
-    HEADERS = {"Content-Type": "application/json"} # Headers for local model
+    HEADERS = {"Content-Type": "application/json"}
 
-SCENARIO_FILE = "scenario.yaml"   # The file containing the game's story and setup
-INVENTORY_FILE = "inventory.yaml" # The file containing all possible items
-SPELLS_FILE = "spells.yaml"       # The file containing all possible spells
+SCENARIO_FILE = "scenario.yaml"
+INVENTORY_FILE = "inventory.yaml"
+SPELLS_FILE = "spells.yaml"
 DEBUG = True
 
-# Global game state variables (will be populated by setup_initial_encounter)
+# Global game state variables
 scenario_data = {}
 all_items = {}
 all_spells = {}
 players = []
 actors = []
 mechanical_summary = None
-environment = None # Will be an instance of the Environment class
-game_history = None # Will be an instance of the GameHistory class
+environment = None
+game_history = None
 
-# --- 1. Character Sheet Loading Utility ---
+# --- Utility Functions ---
 def load_character_sheet(filepath):
     yaml_filepath = os.path.splitext(filepath)[0] + '.yaml'
     try:
@@ -67,7 +66,6 @@ def load_items(filepath):
         return []
 
 def load_spells(filepath):
-    """Loads and processes the spells from the given YAML file."""
     try:
         with open(filepath, 'r') as f:
             spells_list = yaml.safe_load(f)
@@ -80,14 +78,7 @@ def load_spells(filepath):
         print(f"ERROR loading spells file {filepath}: {e}")
         return {}
 
-# --- 2. Game Entity and Environment Classes ---
-# (These have been moved to game_classes.py)
-
-# --- 3. Discrete Action Functions ---
-# (These are in actions.py)
-
-# --- 4. AI Tool Definitions ---
-# This remains here as it's part of the core game setup
+# --- AI Tool Definitions ---
 available_tools = [
     {   "type": "function", "function": {
             "name": "execute_skill_check", "description": "Use a non-magical skill on an object or another character.",
@@ -101,11 +92,8 @@ available_tools = [
     }
 ]
 
-# --- LLM Functions have been moved to llm_calls.py ---
-
-# --- 6. Initial Game Setup ---
+# --- Game Setup ---
 def load_scenario(filepath):
-    """Loads the main scenario file that defines the adventure."""
     global scenario_data
     try:
         with open(filepath, 'r') as f:
@@ -116,10 +104,6 @@ def load_scenario(filepath):
         return False
 
 def setup_initial_encounter():
-    """
-    Sets up the game by loading the environment and creating characters.
-    Populates global players, actors, and environment variables.
-    """
     global players, actors, environment, all_items, all_spells, game_history
 
     if not load_scenario(SCENARIO_FILE):
@@ -132,26 +116,21 @@ def setup_initial_encounter():
         print("Failed to load inventory items. Exiting.")
         return False
 
-    environment = Environment(scenario_data, all_items, all_spells)
     game_history = GameHistory()
 
-    for player_data in scenario_data.get('players', []):
-        sheet_path = player_data['sheet']
-        char_sheet = load_character_sheet(sheet_path)
-        if char_sheet:
-            player_actor = Actor(char_sheet, player_data['location'])
-            player_actor.is_player = True
-            players.append(player_actor)
-        else:
-            print(f"Warning: Could not load player character sheet: {sheet_path}")
+    # The Environment class now handles the creation of actors and objects
+    environment = Environment(
+        scenario_data, 
+        all_items, 
+        all_spells,
+        scenario_data.get('players', []),
+        scenario_data.get('actors', []),
+        load_character_sheet # Pass the function itself
+    )
 
-    for actor_data in scenario_data.get('actors') or []:
-        sheet_path = actor_data['sheet']
-        char_sheet = load_character_sheet(sheet_path)
-        if char_sheet:
-            actors.append(Actor(char_sheet, actor_data['location']))
-        else:
-            print(f"Warning: Could not load actor character sheet: {sheet_path}")
+    # Populate global lists from the environment instance
+    players = environment.players
+    actors = environment.actors
 
     if not players and not actors:
         print("No players or actors loaded. Game cannot start.")
@@ -160,7 +139,6 @@ def setup_initial_encounter():
     return True
 
 def roll_initiative():
-    """Rolls for initiative for all characters in the room. Returns a list of characters in initiative order."""
     all_combatants = players + actors
     initiative_rolls = []
     for combatant in all_combatants:
@@ -170,19 +148,17 @@ def roll_initiative():
         initiative_rolls.append((initiative_score, combatant))
     
     initiative_rolls.sort(key=lambda x: x[0], reverse=True)
-    
     return [combatant for score, combatant in initiative_rolls]
 
 class Tee:
-    """A helper class to redirect print output to both the console and a log file."""
     def __init__(self, *files): self.files = files
     def write(self, obj):
         for f in self.files: f.write(str(obj)); f.flush()
     def flush(self, *files):
         for f in self.files: f.flush()
 
+# --- Main Game Loop ---
 def main_game_loop():
-    """The main loop that runs the game."""
     log_file_name = datetime.now().strftime("game_log_%Y%m%d_%H%M%S.txt")
     
     log_dir = 'logs'
@@ -192,10 +168,7 @@ def main_game_loop():
     log_filepath = os.path.join(log_dir, log_file_name)
 
     llm_config = {
-        "url": LLM_API_URL,
-        "headers": HEADERS,
-        "model": MODEL,
-        "tools": available_tools
+        "url": LLM_API_URL, "headers": HEADERS, "model": MODEL, "tools": available_tools
     }
 
     with open(log_filepath, 'w') as log_f:
@@ -211,11 +184,12 @@ def main_game_loop():
             print("\n--- Initial Encounter Details ---")
             for player in players:
                 current_room, current_zone = environment.get_current_room_data(player.location)
+                objects_in_zone = environment.get_objects_in_zone(player.location['room_id'], player.location['zone'])
                 print(f"Player: {player.name} is in {current_room['name']} (Zone {player.location['zone']}). HP: {player.cur_hp}/{player.max_hp}")
                 if current_zone:
                     print(f"   Zone Description: {current_zone['description']}")
-                    if 'objects' in current_zone and current_zone['objects']:
-                        print(f"   Objects in Zone: {[obj['name'] for obj in current_zone['objects']]}")
+                    if objects_in_zone:
+                        print(f"   Objects in Zone: {[obj.name for obj in objects_in_zone]}")
                     if 'trap' in current_zone:
                         print(f"   There's a {current_zone['trap']['name']} here.")
                 print(f"   Inventory: {[{item['item']: item['quantity']} for item in player.inventory]}")
@@ -255,9 +229,9 @@ def main_game_loop():
                 if DEBUG:
                     print(f"Location: {current_room['name']} (Zone {current_character.location['zone']}) - {current_zone_data['description']}")
                 
-                objects_in_current_zone = current_zone_data.get('objects', [])
+                objects_in_current_zone = environment.get_objects_in_zone(current_character.location['room_id'], current_character.location['zone'])
                 if DEBUG and objects_in_current_zone:
-                    print(f"Objects nearby: {[obj['name'] for obj in objects_in_current_zone]}")
+                    print(f"Objects nearby: {[obj.name for obj in objects_in_current_zone]}")
                 
                 current_trap = environment.get_trap_in_room(current_character.location['room_id'], current_character.location['zone'])
                 if DEBUG:
@@ -268,22 +242,16 @@ def main_game_loop():
 
                 if current_character.is_player:
                     character_action = input(f"{current_character.name}, your action > ").strip()
-                    
                     print(character_action)
                     
-                    # This new pattern correctly handles apostrophes inside quoted dialogue.
                     dialogue_pattern = r'"(.*?)"|\'(.*?)\''
-                    
-                    # Find all dialogue parts. re.findall with this pattern returns a list of tuples.
                     matches = re.findall(dialogue_pattern, character_action)
-                    # Flatten the list of tuples and remove empty strings to get a clean list of dialogue.
                     dialogue_parts = [item for t in matches for item in t if item]
 
                     if dialogue_parts:
                         for dialogue in dialogue_parts:
                             game_history.add_dialogue(current_character.name, dialogue)
                     
-                    # Use the same robust pattern to strip the dialogue, leaving only the command.
                     narration_for_llm = re.sub(dialogue_pattern, '', character_action)
                     narration_for_llm = re.sub(r'\s+', ' ', narration_for_llm).strip() 
 
@@ -304,8 +272,7 @@ def main_game_loop():
                     )
                     if DEBUG: print(f"{current_character.name}'s Mechanical Outcome: {mechanical_result}")
                     
-                # If a mechanical action occurred, generate and print the narration for it.
-                if mechanical_result is not None:
+                if False: #mechanical_result is not None:
                     if DEBUG: print(f"Mechanical Outcome: {mechanical_result}")
 
                     narrative_text = narration(

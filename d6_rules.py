@@ -49,8 +49,13 @@ def roll_d6_dice(pips_to_roll):
     return total
 
 def roll_d6_check(base_trait_pips, difficulty_number, situational_pips_modifier=0):
-    """Performs a standard D6 skill check against a difficulty number."""
+    """
+    Performs a standard D6 skill check against a difficulty number.
+    Returns the total roll and whether the check was a success.
+    """
     effective_pips = max(0, base_trait_pips + situational_pips_modifier)
 
     roll_total = roll_d6_dice(effective_pips)
-    return roll_total
+    success = roll_total >= difficulty_number
+    
+    return roll_total, success

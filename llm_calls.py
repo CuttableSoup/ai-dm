@@ -25,11 +25,9 @@ def player_action(input_command, actor, game_history, environment, players, acto
     """
     current_room, current_zone_data = environment.get_current_room_data(actor.location)
     
-    objects_in_room = []
-    if current_zone_data and 'objects' in current_zone_data:
-        objects_in_room.extend([obj['name'] for obj in current_zone_data['objects']])
-    if current_room and 'objects' in current_room:
-        objects_in_room.extend([obj['name'] for obj in current_room['objects']])
+    # Get objects from the new Environment method
+    objects_in_zone = environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
+    object_names = [obj.name for obj in objects_in_zone]
     
     actors_in_room = [a.name for a in players + actors if a.location == actor.location and a.name != actor.name]
 
@@ -72,7 +70,7 @@ def player_action(input_command, actor, game_history, environment, players, acto
         actor_name=actor.name,
         actor_skills=list(actor.skills.keys()),
         actors_present=actors_in_room,
-        objects_present=objects_in_room,
+        objects_present=object_names,
         doors_present=doors_in_room,
         traps_present=[current_trap['name']] if current_trap else [],
         game_history=game_history.get_history_string()
@@ -125,11 +123,9 @@ def narration(actor, environment, players, actors, mechanical_summary, game_hist
     """
     current_room, current_zone_data = environment.get_current_room_data(actor.location)
 
-    objects_in_room = []
-    if current_zone_data and 'objects' in current_zone_data:
-        objects_in_room.extend([obj['name'] for obj in current_zone_data['objects']])
-    if current_room and 'objects' in current_room:
-        objects_in_room.extend([obj['name'] for obj in current_room['objects']])
+    # Get objects from the new Environment method
+    objects_in_zone = environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
+    object_names = [obj.name for obj in objects_in_zone]
 
     actors_in_room = [a.name for a in players + actors if a.location == actor.location]
 
@@ -154,7 +150,7 @@ def narration(actor, environment, players, actors, mechanical_summary, game_hist
         room_name=current_room['name'] if current_room else 'Unknown Room',
         zone_description=current_zone_data['description'] if current_zone_data else 'No specific zone description.',
         actors_present=", ".join(actors_in_room) if actors_in_room else "none",
-        objects_present=", ".join(objects_in_room) if objects_in_room else "none",
+        objects_present=", ".join(object_names) if object_names else "none",
         mechanical_summary=mechanical_summary,
         player_name=actor.name,
         game_history=game_history.get_history_string(),
@@ -188,11 +184,9 @@ def npc_action(actor, game_history, environment, players, actors, llm_config, de
     """Generates NPC dialogue and function call in one request."""
     current_room, current_zone_data = environment.get_current_room_data(actor.location)
     
-    objects_in_room = []
-    if current_zone_data and 'objects' in current_zone_data:
-        objects_in_room.extend([obj['name'] for obj in current_zone_data['objects']])
-    if current_room and 'objects' in current_room:
-        objects_in_room.extend([obj['name'] for obj in current_room['objects']])
+    # Get objects from the new Environment method
+    objects_in_zone = environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
+    object_names = [obj.name for obj in objects_in_zone]
     
     actors_in_room = [a.name for a in players + actors if a.location == actor.location and a.name != actor.name]
 
@@ -254,7 +248,7 @@ def npc_action(actor, game_history, environment, players, actors, llm_config, de
         room_name=current_room['name'] if current_room else 'Unknown Room',
         zone_description=current_zone_data['description'] if current_zone_data else 'No specific zone description.',
         actors_present=", ".join(actors_in_room) if actors_in_room else "none",
-        objects_present=", ".join(objects_in_room) if objects_in_room else "none",
+        objects_present=", ".join(object_names) if object_names else "none",
         actor_skills=list(actor.skills.keys()),
         player_name=actor.name,
         game_history=game_history.get_history_string(),

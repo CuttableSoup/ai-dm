@@ -1,24 +1,58 @@
-# game_classes.py
+# classes.py
 from collections import deque
 from d6_rules import D6_SKILLS_BY_ATTRIBUTE
 
+class Object:
+    """Represents a static object in the game world."""
+    def __init__(self, object_data, room_id, zone_id=None):
+        self.source_data = object_data
+        # Use setattr to dynamically assign attributes from the object's data dictionary
+        for key, value in object_data.items():
+            setattr(self, key, value)
+        # Store location for easy reference
+        self.location = {'room_id': room_id, 'zone': zone_id}
+
 class Environment:
     """Manages the game world's rooms, objects, and exits."""
-    def __init__(self, scenario_data, all_items, all_spells):
+    def __init__(self, scenario_data, all_items, all_spells, players_data, actors_data, load_character_sheet_func):
         self.rooms = {room['room_id']: room for room in scenario_data.get('environment', {}).get('rooms', [])}
         self.doors = {door['door_id']: door for door in scenario_data.get('environment', {}).get('doors', [])}
-        self.all_items = {item['name'].lower(): item for item in all_items} # Store items by lowercased name for easy lookup
+        self.all_items = {item['name'].lower(): item for item in all_items}
         self.all_spells = all_spells
-        self.actors = []  # A list to hold all Actor objects in the environment
+        
+        self.objects = [] # A list to hold all Object instances
+        self.actors = []  # A list to hold all Actor instances
+        self.players = [] # A list to hold player-controlled Actor instances
 
-    def add_actor(self, actor):
-        """Adds an actor to the environment's list of actors."""
-        if actor not in self.actors:
-            self.actors.append(actor)
+        # --- Instantiate Objects ---
+        for room in self.rooms.values():
+            # Instantiate objects defined globally in the room
+            for obj_data in room.get('objects', []):
+                self.objects.append(Object(obj_data, room['room_id']))
+            # Instantiate objects defined within specific zones
+            for zone_data in room.get('zones', []):
+                for obj_data in zone_data.get('objects', []):
+                    self.objects.append(Object(obj_data, room['room_id'], zone_data.get('zone')))
 
-    def get_actors_in_room(self, room_id):
-        """Returns a list of actors in a specific room."""
-        return [actor for actor in self.actors if actor.location['room_id'] == room_id]
+        # --- Instantiate Players ---
+        for player_data in players_data:
+            sheet_path = player_data['sheet']
+            char_sheet = load_character_sheet_func(sheet_path)
+            if char_sheet:
+                player_actor = Actor(char_sheet, player_data['location'])
+                player_actor.is_player = True
+                self.players.append(player_actor)
+            else:
+                print(f"Warning: Could not load player character sheet: {sheet_path}")
+
+        # --- Instantiate NPCs ---
+        for actor_data in actors_data:
+            sheet_path = actor_data['sheet']
+            char_sheet = load_character_sheet_func(sheet_path)
+            if char_sheet:
+                self.actors.append(Actor(char_sheet, actor_data['location']))
+            else:
+                print(f"Warning: Could not load actor character sheet: {sheet_path}")
 
     def get_room_by_id(self, room_id):
         return self.rooms.get(room_id)
@@ -40,16 +74,17 @@ class Environment:
         return room, current_zone_data
 
     def get_object_in_room(self, room_id, object_name):
-        room = self.get_room_by_id(room_id)
-        if room:
-            for zone_data in room.get('zones', []):
-                for obj in zone_data.get('objects', []):
-                    if obj['name'].lower() == object_name.lower():
-                        return obj
-            for obj in room.get('objects', []):
-                if obj['name'].lower() == object_name.lower():
-                    return obj
+        """Find an Object instance by name within a specific room."""
+        object_name_lower = object_name.lower()
+        for obj in self.objects:
+            if obj.location['room_id'] == room_id and obj.name.lower() == object_name_lower:
+                return obj
         return None
+    
+    def get_objects_in_zone(self, room_id, zone_id):
+        """Returns a list of Object instances in a specific zone."""
+        return [obj for obj in self.objects if obj.location['room_id'] == room_id and obj.location['zone'] == zone_id]
+
 
     def get_trap_in_room(self, room_id, zone_id):
         room = self.get_room_by_id(room_id)
