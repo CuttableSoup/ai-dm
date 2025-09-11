@@ -1,6 +1,6 @@
 scenario_name: The Forgotten Shrine
 players:
-  - sheet: d6_warrior.json
+  - sheet: d6_warrior.yaml
     location:
       room_id: room_1
       zone: 1
@@ -9,7 +9,7 @@ actors:
 #    location:
 #      room_id: room_2
 #      zone: 1
-  - sheet: d6_rogue.json
+  - sheet: d6_rogue.yaml
     location:
       room_id: room_1
       zone: 1

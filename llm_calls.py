@@ -181,15 +181,14 @@ def narration(actor, environment, players, actors, mechanical_summary, game_hist
         return f"LLM Error: Could not get narration. {e}"
 
 def npc_action(actor, game_history, environment, players, actors, llm_config, debug=False):
-    """Generates NPC dialogue and function call in one request."""
+    """
+    Generates NPC dialogue and/or a mechanical action, returning both for processing.
+    """
+    # ... (the entire top part of the function with the prompt setup is the same)
     current_room, current_zone_data = environment.get_current_room_data(actor.location)
-    
-    # Get objects from the new Environment method
     objects_in_zone = environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
     object_names = [obj.name for obj in objects_in_zone]
-    
     actors_in_room = [a.name for a in players + actors if a.location == actor.location and a.name != actor.name]
-
     doors_in_room = []
     if current_zone_data and 'exits' in current_zone_data:
         for exit_data in current_zone_data['exits']:
@@ -198,14 +197,12 @@ def npc_action(actor, game_history, environment, players, actors, llm_config, de
                 door = environment.get_door_by_id(door_ref)
                 if door:
                     doors_in_room.append(door['name'])
-                    
     current_trap = environment.get_trap_in_room(actor.location['room_id'], actor.location['zone'])
     attitudes_list = actor.source_data.get('attitudes', [])
     attitudes_str = "none"
     if attitudes_list:
         formatted_attitudes = [f"{k}: {v}" for d in attitudes_list for k, v in d.items()]
         attitudes_str = ", ".join(formatted_attitudes)
-        
     character_qualities = actor.source_data.get('qualities', {})
     gender = character_qualities.get('gender', 'unknown')
     race = character_qualities.get('race', 'unknown')
@@ -213,7 +210,6 @@ def npc_action(actor, game_history, environment, players, actors, llm_config, de
     eyes = character_qualities.get('eyes', 'unknown')
     hair = character_qualities.get('hair', 'unknown')
     skin = character_qualities.get('skin', 'unknown')
-
     prompt_template = textwrap.dedent("""
     You are an AI Game Master controlling an NPC named {actor_name}. Your task is to determine the NPC's next action, generate their dialogue or a description of the action IN THIRD PERSON, AND select the appropriate function to call if a mechanical action is taken.
 
@@ -287,16 +283,22 @@ def npc_action(actor, game_history, environment, players, actors, llm_config, de
         if debug:
             print(f"\n--- LLM Raw Response ---\n{json.dumps(response, indent=2)}\n------------------------\n")
         
-        npc_narrative = message.get("content", "").strip()
-        if npc_narrative:
-            print(npc_narrative)
-            game_history.add_dialogue(actor.name, npc_narrative)
-
-        if not message.get("tool_calls"):
-            return None
+        # *** KEY CHANGE IS HERE ***
+        # We now capture the narrative text and return it instead of printing.
+        narrative_output = message.get("content", "").strip()
+        mechanical_result = None
         
-        tool_call = message['tool_calls'][0]['function']
-        return execute_function_call(actor, tool_call['name'], json.loads(tool_call['arguments']), environment, players, actors, game_history)
+        if narrative_output:
+            game_history.add_dialogue(actor.name, narrative_output)
+
+        if message.get("tool_calls"):
+            tool_call = message['tool_calls'][0]['function']
+            mechanical_result = execute_function_call(actor, tool_call['name'], json.loads(tool_call['arguments']), environment, players, actors, game_history)
+        
+        # Return both the narrative and the mechanical result
+        return {"narrative": narrative_output, "mechanical": mechanical_result}
 
     except Exception as e:
-        return f"Error communicating with AI: {e}"
+        error_result = f"Error communicating with AI: {e}"
+        # Return the error in the same format
+        return {"narrative": f"{actor.name} seems confused and does nothing.", "mechanical": error_result}
