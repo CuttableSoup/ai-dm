@@ -2,6 +2,7 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter import scrolledtext, Frame, Entry, Button, Menu, filedialog
+from character_creator import CharacterCreatorWindow
 import os
 import ast
 
@@ -27,6 +28,8 @@ class GameGUI:
         file_menu = Menu(self.menu_bar, tearoff=0)
         self.menu_bar.add_cascade(label="File", menu=file_menu)
         file_menu.add_command(label="New Game", command=self.new_game)
+        file_menu.add_command(label="Character Creator", command=self.open_character_creator)
+        file_menu.add_separator()
         file_menu.add_command(label="Save Game", command=self.save_game)
         file_menu.add_command(label="Load Game", command=self.load_game)
         file_menu.add_separator()
@@ -116,6 +119,11 @@ class GameGUI:
             self.output_text.see(tk.END)
         else:
             self.add_output("Failed to load game.\n")
+    
+    def open_character_creator(self):
+        """Opens the character creation tool window."""
+        creator_win = CharacterCreatorWindow(self.root)
+        creator_win.grab_set() # This makes the creator window modal
 
 
 class DebugWindow(tk.Toplevel):
