@@ -1,10 +1,10 @@
 import requests
 import json
-from actions import execute_skill_check
+from actions import execute_skill_check, manage_item, manage_party_member, move_party
 import textwrap
 import copy
 
-def execute_function_call(actor, function_name, arguments, environment, players, actors, game_history):
+def execute_function_call(actor, function_name, arguments, environment, players, actors, game_history, party):
     """
     A helper to execute the function call from the LLM's response.
     This function is now passed the necessary game state components.
@@ -14,11 +14,32 @@ def execute_function_call(actor, function_name, arguments, environment, players,
         game_history.add_action(actor.name, f"attempted to use {arguments.get('skill', 'a skill')} on {arguments.get('target', 'a target')}.")
         return mechanical_result
     
+    elif function_name == "manage_item":
+        mechanical_result = manage_item(actor=actor, environment=environment, party=party, players=players, actors=actors, **arguments)
+        action_desc = arguments.get('action', 'manage')
+        item_desc = arguments.get('item_name', 'an item')
+        target_desc = f" on {arguments.get('target_name', 'a target')}" if 'target_name' in arguments else ""
+        game_history.add_action(actor.name, f"attempted to {action_desc} {item_desc}{target_desc}.")
+        return mechanical_result
+
+    elif function_name == "manage_party_member":
+        mechanical_result = manage_party_member(actor=actor, party=party, actors=actors, **arguments)
+        action_desc = arguments.get('action', 'manage')
+        member_desc = arguments.get('member_name', 'a character')
+        game_history.add_action(actor.name, f"attempted to {action_desc} {member_desc} from the party.")
+        return mechanical_result
+
+    elif function_name == "move_party":
+        mechanical_result = move_party(actor=actor, environment=environment, party=party, **arguments)
+        dest_desc = arguments.get('destination_zone', 'a new area')
+        game_history.add_action(actor.name, f"attempted to move the party to {dest_desc}.")
+        return mechanical_result
+
     mechanical_result = f"Error: The AI tried to call an unknown function '{function_name}'."
     game_history.add_action(actor.name, mechanical_result)
     return mechanical_result
 
-def player_action(input_command, actor, game_history, environment, players, actors, llm_config, debug=False):
+def player_action(input_command, actor, game_history, environment, players, actors, party, llm_config, debug=False):
     """
     Sends the current game state and player command to the AI model,
     which then chooses an action (a function) to execute.
@@ -110,7 +131,7 @@ def player_action(input_command, actor, game_history, environment, players, acto
         function_name = tool_call['name']
         arguments = json.loads(tool_call['arguments'])
         
-        return execute_function_call(actor, function_name, arguments, environment, players, actors, game_history)
+        return execute_function_call(actor, function_name, arguments, environment, players, actors, game_history, party)
 
     except Exception as e:
         mechanical_result = f"Error communicating with AI: {e}"
@@ -180,7 +201,7 @@ def narration(actor, environment, players, actors, mechanical_summary, game_hist
     except Exception as e:
         return f"LLM Error: Could not get narration. {e}"
 
-def npc_action(actor, game_history, environment, players, actors, llm_config, debug=False):
+def npc_action(actor, game_history, environment, players, actors, party, llm_config, debug=False):
     """
     Generates NPC dialogue and/or a mechanical action, returning both for processing.
     """
@@ -293,7 +314,7 @@ def npc_action(actor, game_history, environment, players, actors, llm_config, de
 
         if message.get("tool_calls"):
             tool_call = message['tool_calls'][0]['function']
-            mechanical_result = execute_function_call(actor, tool_call['name'], json.loads(tool_call['arguments']), environment, players, actors, game_history)
+            mechanical_result = execute_function_call(actor, tool_call['name'], json.loads(tool_call['arguments']), environment, players, actors, game_history, party)
         
         # Return both the narrative and the mechanical result
         return {"narrative": narrative_output, "mechanical": mechanical_result}

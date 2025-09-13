@@ -99,7 +99,7 @@ class GameManager:
             output_log.append(f"\n--- {current_character.name}'s Turn ---")
             npc_turn_result = npc_action(
                 current_character, self.game_history, self.environment,
-                self.players, self.actors, self.llm_config, DEBUG
+                self.players, self.actors, self.party, self.llm_config, DEBUG
             )
             if npc_turn_result.get("narrative"):
                 output_log.append(npc_turn_result["narrative"])
@@ -145,7 +145,7 @@ class GameManager:
             return "ERROR: Game is expecting an NPC to act, not a player. State is out of sync."
         mechanical_result = player_action(
             command, player_character, self.game_history,
-            self.environment, self.players, self.actors, self.llm_config, DEBUG
+            self.environment, self.players, self.actors, self.party, self.llm_config, DEBUG
         )
         if mechanical_result:
             output_log.append(f"Mechanics: {mechanical_result}")

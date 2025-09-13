@@ -15,12 +15,43 @@ def main():
         "model": "local-model/gemma-3-12b",
         "tools": [
             {   "type": "function", "function": {
-                    "name": "execute_skill_check", "description": "Use a non-magical skill on an object or another character.",
+                    "name": "execute_skill_check", "description": "Use a non-magical skill on an object or another character. Examples: 'melee goblin', 'observation chest', 'charisma guard'.",
                     "parameters": {"type": "object", "properties": {
                         "skill": {"type": "string", "description": "The name of the skill being used."},
-                        "target": {"type": "string", "description": "The target of the skill."}
+                        "target": {"type": "string", "description": "The target of the skill (an object or character name)."}
                         },
                         "required": ["skill", "target"]
+                    }
+                }
+            },
+            {   "type": "function", "function": {
+                    "name": "manage_item", "description": "Manage an item. Use for equipping, unequipping, using, moving (giving to another character), creating, or destroying items.",
+                    "parameters": {"type": "object", "properties": {
+                        "action": {"type": "string", "description": "The action to perform.", "enum": ["equip", "unequip", "use", "move", "create", "destroy"]},
+                        "item_name": {"type": "string", "description": "The name of the item."},
+                        "quantity": {"type": "integer", "description": "Optional. The number of items. Defaults to 1."},
+                        "target_name": {"type": "string", "description": "Optional. The name of the character to move the item to."}
+                        },
+                        "required": ["action", "item_name"]
+                    }
+                }
+            },
+            {   "type": "function", "function": {
+                    "name": "manage_party_member", "description": "Add or remove a character from the player's party.",
+                    "parameters": {"type": "object", "properties": {
+                        "action": {"type": "string", "description": "The action to perform.", "enum": ["add", "remove"]},
+                        "member_name": {"type": "string", "description": "The name of the character to add or remove."}
+                        },
+                        "required": ["action", "member_name"]
+                    }
+                }
+            },
+            {   "type": "function", "function": {
+                    "name": "move_party", "description": "Move the entire party to an adjacent, connected zone.",
+                    "parameters": {"type": "object", "properties": {
+                        "destination_zone": {"type": "string", "description": "The name of the zone to move to (must be an exit from the current zone)."}
+                        },
+                        "required": ["destination_zone"]
                     }
                 }
             }
