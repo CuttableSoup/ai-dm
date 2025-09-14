@@ -1,6 +1,6 @@
 import requests
 import json
-from actions import execute_skill_check, manage_item, manage_party_member, move_party
+from actions import execute_skill_check, manage_item, manage_party_member, move_party, cast_spell
 import textwrap
 import copy
 
@@ -33,6 +33,13 @@ def execute_function_call(actor, function_name, arguments, environment, players,
         mechanical_result = move_party(actor=actor, environment=environment, party=party, **arguments)
         dest_desc = arguments.get('destination_zone', 'a new area')
         game_history.add_action(actor.name, f"attempted to move the party to {dest_desc}.")
+        return mechanical_result
+    
+    elif function_name == "cast_spell":
+        mechanical_result = cast_spell(actor=actor, environment=environment, players=players, actors=actors, party=party, game_history=game_history, llm_config=llm_config, **arguments)
+        action_desc = arguments.get('spell_name', 'a spell')
+        target_desc = arguments.get('target_name', 'a target')
+        game_history.add_action(actor.name, f"attempted to cast {action_desc} on {target_desc}.")
         return mechanical_result
 
     mechanical_result = f"Error: The AI tried to call an unknown function '{function_name}'."

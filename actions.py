@@ -1,5 +1,17 @@
 # actions.py
 from d6_rules import roll_d6_check, COMBAT_SKILLS, OPPOSED_SKILLS, roll_d6_dice
+from llm_spell_calls import resolve_spell_effect
+
+def find_actor_by_name(name, players, actors):
+    """Utility function to find any actor (player or NPC) by name."""
+    name_lower = name.lower()
+    for p in players:
+        if p.name.lower() == name_lower:
+            return p
+    for a in actors:
+        if a.name.lower() == name_lower:
+            return a
+    return None
 
 def get_equipped_weapon(actor, skill_name, environment):
     """Finds the equipped weapon for a given combat skill."""
@@ -9,8 +21,6 @@ def get_equipped_weapon(actor, skill_name, environment):
             if item_details and item_details.get('skill', '').lower() == skill_name.lower():
                 return item_details
     return None
-
-
 
 def execute_skill_check(actor, skill, target, environment, players, actors):
     """
@@ -326,3 +336,42 @@ def move_party(actor, destination_zone, environment, party):
     new_room, new_zone = environment.get_current_room_data(new_location)
     description = new_zone.get('description', 'You arrive in the new area.')
     return f"The party moves to the {destination_zone}. {description}"
+
+def cast_spell(actor, spell_name, target_name, environment, players, actors, party, game_history, llm_config):
+    """
+    Handles the entire process of casting a spell: skill check, then effect resolution.
+    """
+    # 1. Find the spell details
+    spell_details = environment.get_spell_details(spell_name)
+    if not spell_details:
+        return f"{actor.name} does not know the spell '{spell_name}'."
+
+    # 2. Find the target
+    target = find_actor_by_name(target_name, players, actors)
+    if not target:
+        return f"Cannot find a target named '{target_name}'."
+
+    # 3. Perform the Skill Check
+    caster_skill_pips = actor.get_attribute_or_skill_pips(spell_details['skill'])
+    difficulty = int(spell_details['spell difficulty'])
+    
+    # Simple pass/fail check
+    if caster_skill_pips < difficulty:
+        return f"{actor.name} attempts to cast {spell_name}, but the magic fizzles and dissipates with a faint pop."
+
+    # 4. If successful, resolve the spell effect using the secondary LLM call
+    game_history.add_action(actor.name, f"successfully casts {spell_name} on {target.name}.")
+    
+    # Call the resolver from our new file
+    mechanical_result = resolve_spell_effect(
+        caster=actor,
+        spell=spell_details,
+        target=target,
+        party=party,
+        players=players,
+        actors=actors,
+        llm_config=llm_config,
+        debug=True # Set to False in production
+    )
+    
+    return mechanical_result

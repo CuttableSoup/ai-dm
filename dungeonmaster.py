@@ -54,6 +54,16 @@ def main():
                         "required": ["destination_zone"]
                     }
                 }
+            },
+            {   "type": "function", "function": {
+                    "name": "cast_spell", "description": "Casts a magical spell on a target. Examples: 'cast Fireball on Goblin', 'cast Armor on myself'.",
+                    "parameters": {"type": "object", "properties": {
+                        "spell_name": {"type": "string", "description": "The name of the spell being cast."},
+                        "target_name": {"type": "string", "description": "The name of the character or creature being targeted."}
+                        },
+                        "required": ["spell_name", "target_name"]
+                    }
+                }
             }
         ]
     }

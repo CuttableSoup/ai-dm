@@ -2,6 +2,16 @@
 from collections import deque
 from d6_rules import D6_SKILLS_BY_ATTRIBUTE
 
+class ActiveEffect:
+    """Represents an ongoing spell or condition on a character."""
+    def __init__(self, name, duration_text, target):
+        self.name = name
+        self.duration_text = duration_text
+        self.target_name = target.name
+    
+    def __str__(self):
+        return f"'{self.name}' on {self.target_name} (Duration: {self.duration_text})"
+
 class Object:
     """Represents a static object in the game world."""
     def __init__(self, object_data, room_id, zone_id=None):
@@ -14,11 +24,10 @@ class Object:
 
 class Environment:
     """Manages the game world's rooms, objects, and exits."""
-    def __init__(self, scenario_data, all_items, all_spells, players_data, actors_data, load_character_sheet_func):
+    def __init__(self, scenario_data, all_items, players_data, actors_data, load_character_sheet_func):
         self.rooms = {room['room_id']: room for room in scenario_data.get('environment', {}).get('rooms', [])}
         self.doors = {door['door_id']: door for door in scenario_data.get('environment', {}).get('doors', [])}
         self.all_items = {item['name'].lower(): item for item in all_items}
-        self.all_spells = all_spells
         
         self.objects = [] # A list to hold all Object instances
         self.actors = []  # A list to hold all Actor instances
@@ -97,9 +106,6 @@ class Environment:
     def get_item_details(self, item_name):
         return self.all_items.get(item_name.lower())
 
-    def get_spell_details(self, spell_name):
-        return self.all_spells.get(spell_name.lower())
-
 class Actor:
     """Represents an actor in the game."""
     def __init__(self, character_sheet_data, location):
@@ -160,6 +166,7 @@ class Party:
         self.members = []
         self.reputation = {}  # Tracks reputation with different factions
         self.inventory = []   # A shared party inventory
+        self.active_effects = []
 
     def add_member(self, character):
         """Adds a character to the party."""

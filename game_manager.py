@@ -9,7 +9,6 @@ from d6_rules import roll_d6_dice
 # --- Configuration (can be moved to a config file later) ---
 SCENARIO_FILE = "scenario.yaml"
 INVENTORY_FILE = "inventory.yaml"
-SPELLS_FILE = "spells.yaml"
 DEBUG = True
 
 class GameManager:
@@ -33,12 +32,6 @@ class GameManager:
                 self.scenario_data = yaml.safe_load(f)
             with open(INVENTORY_FILE, 'r') as f:
                 self.all_items = yaml.safe_load(f).get('items', [])
-            with open(SPELLS_FILE, 'r') as f:
-                spells_list = yaml.safe_load(f)
-                self.all_spells = {}
-                for spell_entry in spells_list:
-                    for spell_name, spell_data in spell_entry.items():
-                        self.all_spells[spell_name.lower()] = spell_data
         except FileNotFoundError as e:
             raise Exception(f"Error loading game data: {e}")
         except yaml.YAMLError as e:
@@ -58,7 +51,6 @@ class GameManager:
         self.environment = Environment(
             self.scenario_data,
             self.all_items,
-            self.all_spells,
             self.scenario_data.get('players', []),
             self.scenario_data.get('actors', []),
             self._load_character_sheet
