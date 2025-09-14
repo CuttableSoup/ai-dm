@@ -2,6 +2,7 @@
 from collections import deque
 from d6_rules import D6_SKILLS_BY_ATTRIBUTE
 
+output_log = []
 class ActiveEffect:
     """Represents an ongoing spell or condition on a character."""
     def __init__(self, name, duration_text, target):
@@ -170,15 +171,16 @@ class Party:
 
     def add_member(self, character):
         """Adds a character to the party."""
+        output_log = []
         if character not in self.members:
             self.members.append(character)
-            print(f"{character.name} has joined the party '{self.name}'.")
+            output_log.append(f"{character.name} has joined the party '{self.name}'.")
 
     def remove_member(self, character):
         """Removes a character from the party."""
         if character in self.members:
             self.members.remove(character)
-            print(f"{character.name} has left the party '{self.name}'.")
+            output_log.append(f"{character.name} has left the party '{self.name}'.")
 
     def get_party_members(self):
         """Returns a list of all current party members."""

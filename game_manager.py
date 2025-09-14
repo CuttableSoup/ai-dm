@@ -46,11 +46,12 @@ class GameManager:
 
     def _setup_environment(self):
         """Instantiates the environment, players, and NPCs."""
+        actors_data = self.scenario_data.get('actors') or []
         self.environment = Environment(
             self.scenario_data,
             self.all_items,
             self.scenario_data.get('players', []),
-            self.scenario_data.get('actors', []),
+            actors_data,
             self._load_character_sheet
         )
         self.players = self.environment.players
@@ -121,8 +122,6 @@ class GameManager:
         output_log.append(f"Location: {room['name']} - {zone['description']}\n")
         npc_logs = self._process_npc_turns()
         output_log.extend(npc_logs)
-        first_player = self.turn_order[self.current_turn_index]
-        output_log.append(f"It's {first_player.name}'s turn. What do you do?")
         return "\n".join(output_log)
 
     def process_player_command(self, command):
@@ -152,3 +151,20 @@ class GameManager:
         next_player_character = self.turn_order[self.current_turn_index]
         output_log.append(f"\nIt's now {next_player_character.name}'s turn. What do you do?")
         return "\n".join(output_log)
+    
+    def get_initiative_order(self):
+        """Returns a formatted string of the current initiative order."""
+        if not self.turn_order:
+            return "Initiative has not been rolled yet."
+
+        initiative_lines = []
+        # Header for the list
+        initiative_lines.append("--- Initiative Order ---")
+
+        for i, character in enumerate(self.turn_order):
+            # Add an arrow '-->' to indicate whose turn it is
+            turn_indicator = "--> " if i == self.current_turn_index else "    "
+            line = f"{turn_indicator}{i+1}. {character.name}"
+            initiative_lines.append(line)
+
+        return "\n".join(initiative_lines)

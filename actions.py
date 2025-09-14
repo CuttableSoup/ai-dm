@@ -292,6 +292,7 @@ def manage_item(actor, action, item_name, environment, party, players, actors, q
 
 def manage_party_member(actor, action, member_name, party, actors):
     """Adds or removes a member from the party."""
+    output_log = []
     action_lower = action.lower()
     member_to_manage = next((a for a in actors if a.name.lower() == member_name.lower()), None)
     if not member_to_manage:
@@ -301,14 +302,14 @@ def manage_party_member(actor, action, member_name, party, actors):
             if member_to_manage in party.members:
                 return f"{member_name} is already in the party."
             party.add_member(member_to_manage)
-            return f"{member_name} has joined the party."
+            return output_log.append(f"{member_name} has joined the party.")
         case 'remove':
             if member_to_manage not in party.members:
                 return f"{member_name} is not in the party."
             party.remove_member(member_to_manage)
-            return f"{member_name} has left the party."
+            return output_log.append(f"{member_name} has left the party.")
         case _:
-            return f"Unknown party action: '{action}'."
+            return output_log.append(f"Unknown party action: '{action}'.")
 
 def move_party(actor, destination_zone, environment, party):
     """Moves the entire party to a new zone if the path is valid."""
