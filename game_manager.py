@@ -1,12 +1,10 @@
-# game_manager.py
 import yaml
 import os
 import pickle
-from classes import Environment, GameHistory, Party # --- MODIFIED: Import Party
+from classes import Environment, GameHistory, Party
 from llm_calls import player_action, npc_action, narration
 from d6_rules import roll_d6_dice
 
-# --- Configuration (can be moved to a config file later) ---
 SCENARIO_FILE = "scenario.yaml"
 INVENTORY_FILE = "inventory.yaml"
 DEBUG = True
@@ -18,7 +16,7 @@ class GameManager:
         """Initializes the game by loading all necessary data."""
         self.llm_config = llm_config
         self.game_history = GameHistory()
-        self.party = Party() # --- NEW: Initialize the party
+        self.party = Party()
         self._load_data()
         self._setup_environment()
         self.turn_order = []
@@ -58,7 +56,6 @@ class GameManager:
         self.players = self.environment.players
         self.actors = self.environment.actors
 
-        # --- NEW: Add the loaded players to the party ---
         for player in self.players:
             self.party.add_member(player)
 

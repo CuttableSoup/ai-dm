@@ -1,4 +1,3 @@
-# llm_spell_calls.py
 import requests
 import json
 import textwrap
@@ -87,7 +86,7 @@ def resolve_spell_effect(caster, spell, target, party, players, actors, llm_conf
         caster_name=caster.name,
         target_name=target.name,
         spell_name=spell['name'],
-        spell_description=spell['summary'].replace("{skill}", str(skill_pips)) # Replace placeholder
+        spell_description=spell['summary'].replace("{skill}", str(skill_pips))
     )
 
     payload = {

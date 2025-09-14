@@ -1,4 +1,3 @@
-# actions_spells.py
 import random
 from classes import ActiveEffect
 
@@ -21,9 +20,7 @@ def apply_armor(party, players, actors, target_name, dodge_bonus, duration_text)
     target = find_actor_by_name(target_name, players, actors)
     if not target:
         return f"Error: Target '{target_name}' not found."
-
-    # In a full D6 system, you might add this to a 'dodge_bonus' attribute.
-    # For now, we'll represent it as an effect.
+    
     effect = ActiveEffect(name="Armor Spell", duration_text=duration_text, target=target)
     party.active_effects.append(effect)
     

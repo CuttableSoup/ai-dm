@@ -4,7 +4,7 @@ from actions import execute_skill_check, manage_item, manage_party_member, move_
 import textwrap
 import copy
 
-def execute_function_call(actor, function_name, arguments, environment, players, actors, game_history, party):
+def execute_function_call(actor, function_name, arguments, environment, players, actors, game_history, party, llm_config):
     """
     A helper to execute the function call from the LLM's response.
     This function is now passed the necessary game state components.
@@ -138,7 +138,7 @@ def player_action(input_command, actor, game_history, environment, players, acto
         function_name = tool_call['name']
         arguments = json.loads(tool_call['arguments'])
         
-        return execute_function_call(actor, function_name, arguments, environment, players, actors, game_history, party)
+        return execute_function_call(actor, function_name, arguments, environment, players, actors, game_history, party, llm_config)
 
     except Exception as e:
         mechanical_result = f"Error communicating with AI: {e}"
@@ -311,8 +311,6 @@ def npc_action(actor, game_history, environment, players, actors, party, llm_con
         if debug:
             print(f"\n--- LLM Raw Response ---\n{json.dumps(response, indent=2)}\n------------------------\n")
         
-        # *** KEY CHANGE IS HERE ***
-        # We now capture the narrative text and return it instead of printing.
         narrative_output = message.get("content", "").strip()
         mechanical_result = None
         
@@ -321,7 +319,7 @@ def npc_action(actor, game_history, environment, players, actors, party, llm_con
 
         if message.get("tool_calls"):
             tool_call = message['tool_calls'][0]['function']
-            mechanical_result = execute_function_call(actor, tool_call['name'], json.loads(tool_call['arguments']), environment, players, actors, game_history, party)
+            mechanical_result = execute_function_call(actor, tool_call['name'], json.loads(tool_call['arguments']), environment, players, actors, game_history, party, llm_config)
         
         # Return both the narrative and the mechanical result
         return {"narrative": narrative_output, "mechanical": mechanical_result}

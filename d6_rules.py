@@ -26,13 +26,11 @@ D6_SKILLS_BY_ATTRIBUTE = {
 
 # This dictionary defines which skills can be used to oppose another skill check.
 OPPOSED_SKILLS = {
-    # --- Agility Skills ---
     "deception": ["observation"],
     "melee": ["melee", "dodge"],
     "throwing": ["dodge"],
     "missiles": ["dodge"]
 }
-
 
 # --- D6 Dice Mechanics ---
 def roll_d6_dice(pips_to_roll):

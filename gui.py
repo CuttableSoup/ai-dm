@@ -1,4 +1,3 @@
-# gui.py
 import tkinter as tk
 from tkinter import ttk
 from tkinter import scrolledtext, Frame, Entry, Button, Menu, filedialog
@@ -74,10 +73,8 @@ class GameGUI:
         game_response = self.game_manager.process_player_command(user_input)
         self.add_output(f"{game_response}\n\n")
 
-        # --- MODIFIED: Automatically refresh ALL debug tabs if the window is open ---
         if self.debug_win and self.debug_win.winfo_exists():
             self.debug_win.refresh_all_tabs()
-        # --- END MODIFIED ---
 
     def add_output(self, text):
         self.output_text.config(state='normal')
@@ -153,7 +150,6 @@ class DebugWindow(tk.Toplevel):
         self._create_party_tab()
         self._create_environment_tab()
 
-    # --- NEW: Unified refresh method ---
     def refresh_all_tabs(self):
         """Refreshes the content of all tabs in the debug panel."""
         self.populate_entity_list()

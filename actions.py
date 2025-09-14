@@ -1,4 +1,3 @@
-# actions.py
 from d6_rules import roll_d6_check, COMBAT_SKILLS, OPPOSED_SKILLS, roll_d6_dice
 from llm_spell_calls import resolve_spell_effect
 
@@ -39,9 +38,7 @@ def execute_skill_check(actor, skill, target, environment, players, actors):
     target_trap = environment.get_trap_in_room(actor.location['room_id'], actor.location['zone'])
     target_actor = next((a for a in players + actors if a.name.lower() == target_lower), None)
 
-    # Use a match/case statement to handle different skills
     match skill_lower:
-
         case "melee":
             if not target_actor:
                 return f"Cannot find '{target}' to attack."

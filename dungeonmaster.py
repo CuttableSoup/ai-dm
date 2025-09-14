@@ -1,14 +1,12 @@
-# run_game.py
 import tkinter as tk
 from gui import GameGUI  # We will import the GUI we already made
 from game_manager import GameManager # And the Game Manager we just created
-import config # Assuming you still have your API key in config.py
+import config
 
 def main():
     """Initializes and runs the game application."""
 
     # --- LLM Configuration ---
-    # This is taken from your original dungeonmaster.py
     llm_config = {
         "url": "http://localhost:1234/v1/chat/completions",
         "headers": {"Content-Type": "application/json"},
