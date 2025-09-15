@@ -151,7 +151,7 @@ class DebugWindow(tk.Toplevel):
         self._create_initiative_tab()
         self._create_history_tab()
         self._create_party_tab()
-        self._create_environment_tab() # MODIFIED: This function is now much more complex
+        self._create_environment_tab()
 
     def refresh_all_tabs(self):
         """Refreshes the content of all tabs in the debug panel."""
@@ -331,11 +331,85 @@ class DebugWindow(tk.Toplevel):
             if hasattr(entity, 'location') and entity.location == current_actor.location:
                 self.displayed_entities.append(entity)
                 self.entity_listbox.insert(tk.END, f"{entity.__class__.__name__}: {entity.name}")
+    
+    # --- NEW INVENTORY UI METHODS ---
+
+    def _create_inventory_ui(self, parent, row_index, inventory_list):
+        """Creates a custom UI for editing an inventory list."""
+        main_container = Frame(parent, bd=1, relief=tk.SOLID)
+        main_container.grid(row=row_index, column=1, sticky="ew", padx=2, pady=2)
+        
+        # Canvas for scrollable content
+        list_canvas = tk.Canvas(main_container, height=150)
+        list_scrollbar = tk.Scrollbar(main_container, orient="vertical", command=list_canvas.yview)
+        scrollable_frame = Frame(list_canvas)
+        scrollable_frame.bind("<Configure>", lambda e, c=list_canvas: c.configure(scrollregion=c.bbox("all")))
+        list_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        list_canvas.configure(yscrollcommand=list_scrollbar.set)
+        
+        list_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        list_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self._bind_scroll_recursive(scrollable_frame, list_canvas)
+
+        item_widget_list = []
+        for item_dict in inventory_list:
+            self._create_inventory_row(scrollable_frame, item_dict, item_widget_list)
+        
+        self.attribute_widgets['inventory'] = item_widget_list
+
+        add_button = Button(main_container, text="Add New Item", command=self._add_inventory_item)
+        add_button.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def _create_inventory_row(self, parent_frame, item_dict, widget_list):
+        """Creates a single row in the inventory editor UI."""
+        row_frame = Frame(parent_frame, padx=2, pady=2)
+        row_frame.pack(fill=tk.X, expand=True)
+
+        tk.Label(row_frame, text="Item:").pack(side=tk.LEFT)
+        item_entry = Entry(row_frame)
+        item_entry.insert(0, item_dict.get('item', ''))
+        item_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+
+        tk.Label(row_frame, text="Quantity:").pack(side=tk.LEFT)
+        qty_entry = Entry(row_frame, width=5)
+        qty_entry.insert(0, item_dict.get('quantity', 1))
+        qty_entry.pack(side=tk.LEFT, padx=(0, 10))
+
+        remove_button = Button(row_frame, text="X", fg="red",
+                               command=lambda rf=row_frame, data=item_dict: self._remove_inventory_item(rf, data))
+        remove_button.pack(side=tk.LEFT)
+
+        widget_list.append({'item_entry': item_entry, 'qty_entry': qty_entry})
+
+    def _add_inventory_item(self):
+        """Adds a blank item to the selected entity's inventory and refreshes the UI."""
+        if not self.selected_entity or not hasattr(self.selected_entity, 'inventory'):
+            return
+        
+        new_item = {'item': 'new_item', 'quantity': 1}
+        self.selected_entity.inventory.append(new_item)
+        
+        # Refresh the entire details view to show the new item
+        self.show_entity_details()
+
+    def _remove_inventory_item(self, row_frame, item_data_dict):
+        """Removes an item from the UI and the underlying data."""
+        if not self.selected_entity or not hasattr(self.selected_entity, 'inventory'):
+            return
+            
+        # Remove from the data
+        if item_data_dict in self.selected_entity.inventory:
+            self.selected_entity.inventory.remove(item_data_dict)
+        
+        # Refresh the UI. This is simpler than trying to manage widget lists manually.
+        self.show_entity_details()
 
     def show_entity_details(self, event=None):
-        sel = self.entity_listbox.curselection()
-        if not sel: return
-        self.selected_entity = self.displayed_entities[sel[0]]
+        sel_indices = self.entity_listbox.curselection()
+        if not sel_indices: return
+        
+        self.selected_entity = self.displayed_entities[sel_indices[0]]
         for widget in self.details_frame.winfo_children(): widget.destroy()
         self.attribute_widgets = {}
         
@@ -348,57 +422,28 @@ class DebugWindow(tk.Toplevel):
             value = getattr(self.selected_entity, attr_name)
             tk.Label(self.details_frame, text=attr_name).grid(row=i, column=0, sticky="nw", padx=5, pady=5)
             
-            if attr_name == 'attitudes':
-                normalized_attitudes = {}
-                if isinstance(value, list):
-                    for item_dict in value:
-                        if isinstance(item_dict, dict):
-                            normalized_attitudes.update(item_dict)
-                elif isinstance(value, dict):
-                    normalized_attitudes = value
-                
-                value = normalized_attitudes
-                
+            if attr_name == 'inventory' and isinstance(value, list):
+                self._create_inventory_ui(self.details_frame, i, value)
+            
+            elif attr_name == 'attitudes':
+                normalized_attitudes = value if isinstance(value, dict) else {k: v for d in value for k, v in d.items()}
                 main_container = Frame(self.details_frame, bd=1, relief=tk.SOLID)
                 main_container.grid(row=i, column=1, sticky="ew", padx=2, pady=2)
                 items_frame = Frame(main_container)
                 items_frame.pack(fill="x", expand=True, padx=2, pady=2)
-
                 sub_widgets = []
-                for key, val in value.items():
+                for key, val in normalized_attitudes.items():
                     self._create_dict_row(items_frame, key, val, sub_widgets)
-
                 add_button = Button(main_container, text="+ Add Attitude", command=lambda f=items_frame, w=sub_widgets: self._add_dict_item(f, w))
                 add_button.pack(fill="x", expand=True, side="bottom")
-
                 self.attribute_widgets[attr_name] = sub_widgets
             
-            elif isinstance(value, list) and value:
-                if isinstance(value[0], dict):
-                    main_container = Frame(self.details_frame, bd=1, relief=tk.SOLID)
-                    main_container.grid(row=i, column=1, sticky="ew", padx=2, pady=2)
-                    main_container.grid_columnconfigure(0, weight=1)
-                    list_canvas = tk.Canvas(main_container, height=150, bd=0, highlightthickness=0)
-                    list_scrollbar = tk.Scrollbar(main_container, orient="vertical", command=list_canvas.yview)
-                    scrollable_frame = Frame(list_canvas)
-                    scrollable_frame.bind("<Configure>", lambda e, c=list_canvas: c.configure(scrollregion=c.bbox("all")))
-                    list_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-                    list_canvas.configure(yscrollcommand=list_scrollbar.set)
-                    list_canvas.grid(row=0, column=0, sticky="nsew")
-                    list_scrollbar.grid(row=0, column=1, sticky="ns")
-                    main_container.grid_rowconfigure(0, weight=1)
-                    item_widget_list = []
-                    self.attribute_widgets[attr_name] = item_widget_list
-                    for item_dict in value:
-                        self._create_structured_list_row(scrollable_frame, item_dict, item_widget_list, attr_name)
-                    self._bind_scroll_recursive(scrollable_frame, list_canvas)
-                    template = value[0] if value else {}
-                    add_button = Button(main_container, text="+ Add New Item", command=lambda sf=scrollable_frame, iwl=item_widget_list, t=template, an=attr_name: self._add_structured_item(sf, iwl, t, an))
-                    add_button.grid(row=1, column=0, columnspan=2, sticky="ew")
-                else:
-                    self._create_simple_list_ui(self.details_frame, i, value, attr_name)
+            elif isinstance(value, list) and value and isinstance(value[0], dict):
+                self._create_structured_list_ui(self.details_frame, i, value, attr_name)
+
             elif isinstance(value, list):
                  self._create_simple_list_ui(self.details_frame, i, value, attr_name)
+                 
             elif isinstance(value, dict):
                 dict_frame = Frame(self.details_frame, bd=1, relief=tk.SOLID)
                 dict_frame.grid(row=i, column=1, sticky="ew", padx=2, pady=2)
@@ -417,6 +462,29 @@ class DebugWindow(tk.Toplevel):
                 widget.grid(row=i, column=1, sticky="ew", padx=2, pady=2)
                 self.attribute_widgets[attr_name] = widget
     
+    def _create_structured_list_ui(self, parent, row_index, value, attr_name):
+        """Creates a generic UI for a list of dictionaries."""
+        main_container = Frame(parent, bd=1, relief=tk.SOLID)
+        main_container.grid(row=row_index, column=1, sticky="ew", padx=2, pady=2)
+        main_container.grid_columnconfigure(0, weight=1)
+        list_canvas = tk.Canvas(main_container, height=150, bd=0, highlightthickness=0)
+        list_scrollbar = tk.Scrollbar(main_container, orient="vertical", command=list_canvas.yview)
+        scrollable_frame = Frame(list_canvas)
+        scrollable_frame.bind("<Configure>", lambda e, c=list_canvas: c.configure(scrollregion=c.bbox("all")))
+        list_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        list_canvas.configure(yscrollcommand=list_scrollbar.set)
+        list_canvas.grid(row=0, column=0, sticky="nsew")
+        list_scrollbar.grid(row=0, column=1, sticky="ns")
+        main_container.grid_rowconfigure(0, weight=1)
+        item_widget_list = []
+        self.attribute_widgets[attr_name] = item_widget_list
+        for item_dict in value:
+            self._create_structured_list_row(scrollable_frame, item_dict, item_widget_list, attr_name)
+        self._bind_scroll_recursive(scrollable_frame, list_canvas)
+        template = value[0] if value else {}
+        add_button = Button(main_container, text="+ Add New Item", command=lambda sf=scrollable_frame, iwl=item_widget_list, t=template, an=attr_name: self._add_structured_item(sf, iwl, t, an))
+        add_button.grid(row=1, column=0, columnspan=2, sticky="ew")
+
     def _create_simple_list_ui(self, parent, row_index, value, attr_name):
         list_container = Frame(parent, bd=1, relief=tk.SOLID)
         list_container.grid(row=row_index, column=1, sticky="ew", padx=2, pady=2)
@@ -447,17 +515,28 @@ class DebugWindow(tk.Toplevel):
 
     def save_entity_details(self):
         if not self.selected_entity: return
+        
         for attr, collection in self.attribute_widgets.items():
             orig_val = getattr(self.selected_entity, attr, None)
             try:
-                if attr == 'attitudes':
+                if attr == 'inventory':
+                    new_inventory = []
+                    for widget_set in collection:
+                        item_name = widget_set['item_entry'].get()
+                        try:
+                            quantity = int(widget_set['qty_entry'].get())
+                        except ValueError:
+                            quantity = 1
+                        if item_name:
+                            new_inventory.append({'item': item_name, 'quantity': quantity})
+                    setattr(self.selected_entity, attr, new_inventory)
+                
+                elif attr == 'attitudes':
                     new_dict = {}
                     if isinstance(collection, list):
                         for (key_entry, val_entry) in collection:
-                            key = key_entry.get().strip()
-                            val = val_entry.get().strip()
-                            if key:
-                                new_dict[key] = val
+                            key, val = key_entry.get().strip(), val_entry.get().strip()
+                            if key: new_dict[key] = val
                     setattr(self.selected_entity, attr, new_dict)
 
                 elif isinstance(collection, list) and isinstance(orig_val, list):
@@ -466,18 +545,16 @@ class DebugWindow(tk.Toplevel):
                         for item_widget_dict in collection:
                             new_item_dict = {}
                             for key, widget in item_widget_dict.items():
-                                val = None
-                                if isinstance(widget, tk.BooleanVar): val = widget.get()
-                                elif isinstance(widget, Entry): val = widget.get()
-                                else: val = widget
+                                val = widget.get() if isinstance(widget, (tk.BooleanVar, Entry)) else widget
                                 new_item_dict[key] = val
+                            
                             if orig_val:
                                 template_dict = orig_val[0] if orig_val else {}
                                 for key in new_item_dict:
                                     if key in template_dict:
                                         orig_type = type(template_dict.get(key, ''))
-                                        current_val = new_item_dict[key]
                                         try:
+                                            current_val = new_item_dict[key]
                                             if orig_type is bool and not isinstance(current_val, bool):
                                                 new_item_dict[key] = str(current_val).lower() in ('true', '1', 'yes')
                                             elif type(current_val) is not orig_type:
@@ -487,31 +564,39 @@ class DebugWindow(tk.Toplevel):
                         setattr(self.selected_entity, attr, new_list_of_dicts)
                     else:
                         new_list = []
-                        item_type = str
-                        if orig_val and len(orig_val) > 0 and orig_val[0] is not None: item_type = type(orig_val[0])
+                        item_type = type(orig_val[0]) if orig_val else str
                         for entry_widget in collection:
-                            val_str = entry_widget.get()
-                            try: new_list.append(item_type(val_str))
-                            except (ValueError, TypeError): new_list.append(val_str)
+                            try:
+                                new_list.append(item_type(entry_widget.get()))
+                            except (ValueError, TypeError):
+                                new_list.append(entry_widget.get())
                         setattr(self.selected_entity, attr, new_list)
+
                 elif isinstance(collection, dict) and isinstance(orig_val, dict):
                     new_dict = {}
                     for key, entry_widget in collection.items():
                         val_str = entry_widget.get()
                         orig_type = type(orig_val.get(key, ''))
-                        try: new_dict[key] = orig_type(val_str)
-                        except (ValueError, TypeError): new_dict[key] = val_str
+                        try:
+                            new_dict[key] = orig_type(val_str)
+                        except (ValueError, TypeError):
+                            new_dict[key] = val_str
                     setattr(self.selected_entity, attr, new_dict)
+                
                 elif isinstance(collection, Entry):
                     val_str = collection.get()
-                    if isinstance(orig_val, bool): new_val = val_str.lower() in ('true', '1', 'yes')
-                    elif orig_val is None: new_val = val_str if val_str.lower() != 'none' else None
-                    else: new_val = type(orig_val)(val_str)
+                    if isinstance(orig_val, bool):
+                        new_val = val_str.lower() in ('true', '1', 'yes')
+                    elif orig_val is None:
+                        new_val = val_str if val_str.lower() != 'none' else None
+                    else:
+                        new_val = type(orig_val)(val_str)
                     setattr(self.selected_entity, attr, new_val)
-            except Exception as e:
-                print(f"Could not save attribute '{attr}'. Error: {e}")
 
-        print(f"Updated attributes for {self.selected_entity.name}")
+            except Exception as e:
+                messagebox.showerror("Save Error", f"Could not save attribute '{attr}'.\nError: {e}")
+
+        messagebox.showinfo("Success", f"Attributes for {self.selected_entity.name} have been updated.")
         self.show_entity_details()
 
     def _create_initiative_tab(self):
@@ -559,68 +644,44 @@ class DebugWindow(tk.Toplevel):
     # --- ENVIRONMENT TAB METHODS START HERE ---
 
     def _get_descriptive_name(self, item, index):
-        """Finds a descriptive name for an item from a list for display in the tree."""
         item_node_name = f"Item {index+1}"
         if isinstance(item, dict):
-            if 'name' in item:
-                item_node_name = item['name']
-            elif 'zone' in item:
-                item_node_name = f"Zone {item['zone']}"
-            elif 'skill' in item:
-                item_node_name = f"Action: {item['skill']}"
-            elif 'door_ref' in item:
-                item_node_name = f"Exit via {item['door_ref']}"
+            if 'name' in item: item_node_name = item['name']
+            elif 'item' in item: item_node_name = f"{item['item']} (x{item.get('quantity', 1)})"
+            elif 'zone' in item: item_node_name = f"Zone {item['zone']}"
+            elif 'skill' in item: item_node_name = f"Action: {item['skill']}"
+            elif 'door_ref' in item: item_node_name = f"Exit via {item['door_ref']}"
         return item_node_name
         
     def _add_node_to_tree(self, parent_node_id, parent_data, data, key_name=""):
-        """
-        Recursively adds data to the Treeview, mapping each node to its underlying data object.
-        It now only adds nodes for structural elements (dicts and lists), not primitive values.
-        """
-        node_id = None
+        FLATTENED_LISTS = ['objects', 'actions', 'inventory', 'exits']
+
         if isinstance(data, dict):
-            # Use a more descriptive name for certain keys
             node_text = key_name
-            if key_name == 'trap':
-                node_text = f"Trap: {data.get('name', 'Unnamed Trap')}"
+            if key_name == 'trap': node_text = f"Trap: {data.get('name', 'Unnamed Trap')}"
             
             node_id = self.env_tree.insert(parent_node_id, "end", text=node_text, open=False)
             self.tree_item_map[node_id] = {'data': data, 'parent': parent_data, 'key': key_name}
-            # Recurse into the dictionary's values
             for key, value in data.items():
                 self._add_node_to_tree(node_id, data, value, key_name=key)
 
         elif isinstance(data, list):
-            # Special "flattened" lists whose items are added directly to the parent node
-            if key_name in ['objects', 'exits', 'actions', 'zones']:
+            if key_name in FLATTENED_LISTS:
                 for i, item in enumerate(data):
                     item_node_name = self._get_descriptive_name(item, i)
-                    # The parent is the list itself (data), and the key is its index (i)
                     self._add_node_to_tree(parent_node_id, data, item, key_name=item_node_name)
             else:
-                # For all other lists, create a container node
                 node_id = self.env_tree.insert(parent_node_id, "end", text=key_name, open=False)
                 self.tree_item_map[node_id] = {'data': data, 'parent': parent_data, 'key': key_name}
                 for i, item in enumerate(data):
                     item_node_name = self._get_descriptive_name(item, i)
                     self._add_node_to_tree(node_id, data, item, key_name=item_node_name)
-        else:
-            # This block is intentionally left empty. We no longer create leaf nodes
-            # in the tree for simple values (strings, numbers, etc.). They will be
-            # visible and editable in the right-hand panel when their parent
-            # dictionary is selected.
-            pass
 
-    def _create_environment_tab(self): # MODIFIED
-        """Creates the two-panel layout for the environment editor."""
-        self.tree_item_map = {}
-        self.selected_env_item = None
-        self.env_attribute_widgets = {}
-
+    def _create_environment_tab(self):
+        self.tree_item_map, self.selected_env_item, self.env_attribute_widgets = {}, None, {}
         paned_window = tk.PanedWindow(self.tab_environment, orient=tk.HORIZONTAL)
         paned_window.pack(fill=tk.BOTH, expand=True)
 
-        # Left pane: Treeview
         left_frame = Frame(paned_window, bd=2, relief=tk.SUNKEN)
         self.env_tree = ttk.Treeview(left_frame)
         tree_scrollbar = ttk.Scrollbar(left_frame, orient="vertical", command=self.env_tree.yview)
@@ -630,7 +691,6 @@ class DebugWindow(tk.Toplevel):
         self.env_tree.bind("<<TreeviewSelect>>", self.show_env_details)
         paned_window.add(left_frame, width=300)
 
-        # Right pane: Details editor
         right_frame = Frame(paned_window, bd=2, relief=tk.SUNKEN)
         self.env_canvas = tk.Canvas(right_frame)
         details_scrollbar = tk.Scrollbar(right_frame, orient="vertical", command=self.env_canvas.yview)
@@ -642,63 +702,49 @@ class DebugWindow(tk.Toplevel):
         details_scrollbar.pack(side="right", fill="y")
         paned_window.add(right_frame)
         
-        # MODIFIED: Updated button layout for more flexible adding
         button_frame = Frame(self.tab_environment)
         button_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=5)
         Button(button_frame, text="Save Changes", command=self.save_env_details).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
         
-        # Context-sensitive add button
-        Button(button_frame, text="Add to Selected", command=self.add_item_to_selection).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-
-        # Top-level add button with a menu
-        add_toplevel_button = ttk.Menubutton(button_frame, text="Add Top-Level")
-        top_level_menu = Menu(add_toplevel_button, tearoff=0)
-        top_level_menu.add_command(label="Room", command=self._add_new_room)
-        top_level_menu.add_command(label="Door", command=self._add_new_door)
-        add_toplevel_button["menu"] = top_level_menu
-        add_toplevel_button.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+        self.add_menu_button = ttk.Menubutton(button_frame, text="Add...")
+        self.add_menu = Menu(self.add_menu_button, tearoff=0)
+        self.add_menu_button["menu"] = self.add_menu
+        self.add_menu_button.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
         Button(button_frame, text="Remove Selected", fg="red", command=self.remove_env_item).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
         
         self.refresh_environment_tab()
 
-    def refresh_environment_tab(self): # MODIFIED
-        """Refreshes the environment tree view and clears the selection map."""
-        # You can now remove the print() statement you added for debugging.
-        
+    def refresh_environment_tab(self):
         if not self.game_manager.turn_order: return
-        for i in self.env_tree.get_children():
-            self.env_tree.delete(i)
+        for i in self.env_tree.get_children(): self.env_tree.delete(i)
         self.tree_item_map.clear()
         
-        for widget in self.env_details_frame.winfo_children():
-            widget.destroy()
+        for widget in self.env_details_frame.winfo_children(): widget.destroy()
         self.selected_env_item = None
+        self._update_add_menu()
 
         env = self.game_manager.environment
-        
-        # MODIFIED: Changed to handle a dictionary of rooms
         if hasattr(env, 'rooms') and isinstance(env.rooms, dict):
-            rooms_root_node = self.env_tree.insert("", "end", text="Rooms", open=True)
-            self.tree_item_map[rooms_root_node] = {'data': env.rooms, 'parent': env, 'key': 'rooms'}
-            # MODIFIED: Switched from enumerate to .items() for dictionary iteration
+            rooms_root = self.env_tree.insert("", "end", text="Rooms", open=True)
+            self.tree_item_map[rooms_root] = {'data': env.rooms, 'parent': env, 'key': 'rooms'}
             for room_id, room_data in env.rooms.items():
-                room_name = room_data.get('name', room_id)
-                self._add_node_to_tree(rooms_root_node, env.rooms, room_data, key_name=f"{room_id}: {room_name}")
+                self._add_node_to_tree(rooms_root, env.rooms, room_data, key_name=f"{room_id}: {room_data.get('name', '')}")
 
-        # MODIFIED: Changed to handle a dictionary of doors
         if hasattr(env, 'doors') and isinstance(env.doors, dict):
-            doors_root_node = self.env_tree.insert("", "end", text="Doors", open=False)
-            self.tree_item_map[doors_root_node] = {'data': env.doors, 'parent': env, 'key': 'doors'}
-            # MODIFIED: Switched from enumerate to .items() for dictionary iteration
+            doors_root = self.env_tree.insert("", "end", text="Doors", open=False)
+            self.tree_item_map[doors_root] = {'data': env.doors, 'parent': env, 'key': 'doors'}
             for door_id, door_data in env.doors.items():
-                door_name = door_data.get('name', door_id)
-                self._add_node_to_tree(doors_root_node, env.doors, door_data, key_name=f"{door_id}: {door_name}")
+                self._add_node_to_tree(doors_root, env.doors, door_data, key_name=f"{door_id}: {door_data.get('name', '')}")
 
-    def show_env_details(self, event=None): # MODIFIED
+    # --- RESTORED METHOD ---
+    def show_env_details(self, event=None):
         """Displays editable widgets for the selected environment item."""
         selection = self.env_tree.selection()
-        if not selection: return
+        if not selection: 
+            self.selected_env_item = None
+            self._update_add_menu()
+            return
         
         selected_id = selection[0]
         self.selected_env_item = self.tree_item_map.get(selected_id)
@@ -718,23 +764,19 @@ class DebugWindow(tk.Toplevel):
             for key, value in data.items():
                 tk.Label(self.env_details_frame, text=key).grid(row=i, column=0, sticky="nw", padx=5, pady=2)
 
-                # MODIFIED: Use a larger Text widget for descriptions
                 if key == 'description':
                     widget = tk.Text(self.env_details_frame, height=4, wrap=tk.WORD)
                     widget.insert("1.0", str(value))
                     widget.grid(row=i, column=1, sticky="ew", padx=5, pady=2)
                     self.env_attribute_widgets[key] = widget
-                    i += 1
                 elif isinstance(value, (str, int, float, bool)):
                     widget = Entry(self.env_details_frame)
                     widget.insert(0, str(value))
                     widget.grid(row=i, column=1, sticky="ew", padx=5, pady=2)
                     self.env_attribute_widgets[key] = widget
-                    i += 1
                 else:
-                    # For complex types (lists/dicts), just display their type as non-editable
-                    tk.Label(self.env_details_frame, text=f"<{type(value).__name__}> (Select in tree to edit)").grid(row=i, column=1, sticky="w", padx=5, pady=2)
-                    i += 1
+                    tk.Label(self.env_details_frame, text=f"<{type(value).__name__}> (Not directly editable)").grid(row=i, column=1, sticky="w", padx=5, pady=2)
+                i += 1
         elif isinstance(data, (str, int, float, bool)):
              key = self.selected_env_item['key']
              tk.Label(self.env_details_frame, text=f"Value for '{key}'").grid(row=0, column=0, sticky="nw", padx=5, pady=2)
@@ -743,130 +785,123 @@ class DebugWindow(tk.Toplevel):
              entry.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
              self.env_attribute_widgets['value'] = entry
 
-    def save_env_details(self): # MODIFIED
-        """Saves changes from the editor back to the environment data."""
+        self._update_add_menu()
+
+    def save_env_details(self):
         if not self.selected_env_item:
             messagebox.showwarning("Warning", "No environment item selected.")
             return
 
-        data = self.selected_env_item['data']
-        parent = self.selected_env_item['parent']
-        key = self.selected_env_item['key']
+        data, parent, key = self.selected_env_item['data'], self.selected_env_item['parent'], self.selected_env_item['key']
 
         if isinstance(data, dict):
             for attr_key, widget in self.env_attribute_widgets.items():
                 if attr_key in data:
-                    new_val_str = ""
-                    # MODIFIED: Correctly get value from either Text or Entry widget
-                    if isinstance(widget, tk.Text):
-                        new_val_str = widget.get("1.0", tk.END).strip()
-                    else: # It's an Entry widget
-                        new_val_str = widget.get()
-
+                    new_val_str = widget.get("1.0", tk.END).strip() if isinstance(widget, tk.Text) else widget.get()
                     orig_type = type(data[attr_key])
                     try:
-                        if orig_type is bool:
-                            data[attr_key] = new_val_str.lower() in ('true', '1', 'yes')
-                        else:
-                            data[attr_key] = orig_type(new_val_str)
+                        data[attr_key] = new_val_str.lower() in ('true', '1', 'yes') if orig_type is bool else orig_type(new_val_str)
                     except (ValueError, TypeError):
                         messagebox.showerror("Save Error", f"Invalid value for '{attr_key}'. Could not convert '{new_val_str}' to {orig_type.__name__}.")
                         return
         elif 'value' in self.env_attribute_widgets:
-            widget = self.env_attribute_widgets['value']
-            new_val_str = widget.get()
+            new_val_str = self.env_attribute_widgets['value'].get()
             orig_type = type(data)
             try:
-                if isinstance(parent, dict):
-                    if orig_type is bool: parent[key] = new_val_str.lower() in ('true', '1', 'yes')
-                    else: parent[key] = orig_type(new_val_str)
-                elif isinstance(parent, list):
-                    if orig_type is bool: parent[key] = new_val_str.lower() in ('true', '1', 'yes')
-                    else: parent[key] = orig_type(new_val_str)
+                new_val = new_val_str.lower() in ('true', '1', 'yes') if orig_type is bool else orig_type(new_val_str)
+                if isinstance(parent, dict): parent[key] = new_val
+                elif isinstance(parent, list): parent[key] = new_val
             except (ValueError, TypeError):
                  messagebox.showerror("Save Error", f"Invalid value. Could not convert '{new_val_str}' to {orig_type.__name__}.")
                  return
         
         messagebox.showinfo("Success", "Changes saved successfully.")
         self.refresh_environment_tab()
-
-    # RENAMED from add_env_item
-    def add_item_to_selection(self):
-        """Adds a new element as a child of the current selection (context-sensitive)."""
-        if not self.selected_env_item:
-            messagebox.showwarning("Warning", "Select an element (like a Room or Zone) to add to.")
-            return
-
-        data = self.selected_env_item['data']
-        key = self.selected_env_item['key']
-
-        # Determine where to add the new item based on selection
-        target_list = None
-        template = None
-        
-        if isinstance(data, dict) and 'zones' in data: # It's a room
-             if not isinstance(data.get('zones'), list): data['zones'] = []
-             target_list = data['zones']
-             template = {"zone": len(target_list) + 1, "description": "A new zone.", "objects": [], "exits": []}
-        elif isinstance(data, dict) and 'objects' in data: # It's a zone
-             if not isinstance(data.get('objects'), list): data['objects'] = []
-             target_list = data['objects']
-             template = { "name": "New Object", "description": "A new object.", "actions": [] }
-        elif key == 'rooms' and isinstance(data, dict): # Top-level "Rooms" category is selected
-            self._add_new_room()
-            return
-        elif key == 'doors' and isinstance(data, dict): # Top-level "Doors" category is selected
-            self._add_new_door()
-            return
-
-        if template and target_list is not None:
-            target_list.append(template)
-            self.refresh_environment_tab()
-        else:
-            messagebox.showinfo("Info", "Cannot add a child to this type of element. Select a Room, Zone, or main category.")
-            return
     
-    # NEW helper methods for the Top-Level menu
+    def _get_template(self, template_name, context_data=None):
+        if template_name == 'zone':
+            next_zone_num = len(context_data.get('zones', [])) + 1 if context_data else 1
+            return {"zone": next_zone_num, "description": "A new zone.", "objects": [], "exits": []}
+        elif template_name == 'object':
+            return {"name": "New Object", "description": "A new object.", "actions": []}
+        elif template_name == 'exit':
+            return {"door_ref": "some_door_id", "to_room": "some_room_id", "to_zone": 1, "description": "An exit."}
+        elif template_name == 'trap':
+            return {"name": "new trap", "status": "armed", "known": "", "attack": 10, "damage": 5, "actions": []}
+        elif template_name == 'action':
+            return {"skill": "strength", "difficulty": 10, "pass": "success", "fail": "nothing"}
+        elif template_name == 'inventory_item':
+            return {"item": "new_item_id", "quantity": 1}
+        return {}
+
+    def _add_item_to_list(self, parent_dict, list_key, template):
+        if not isinstance(parent_dict.get(list_key), list):
+            parent_dict[list_key] = []
+        parent_dict[list_key].append(template)
+        self.refresh_environment_tab()
+
+    def _add_item_as_dict_key(self, parent_dict, key, template):
+        if key not in parent_dict:
+            parent_dict[key] = template
+            self.refresh_environment_tab()
+    
+    def _update_add_menu(self):
+        self.add_menu.delete(0, "end")
+        if not self.selected_env_item:
+            self.add_menu.add_command(label="Add Room", command=self._add_new_room)
+            self.add_menu.add_command(label="Add Door", command=self._add_new_door)
+            return
+
+        data, key = self.selected_env_item['data'], self.selected_env_item['key']
+        
+        if isinstance(data, dict):
+            if key == 'rooms': self.add_menu.add_command(label="Add Room", command=self._add_new_room)
+            elif key == 'doors': self.add_menu.add_command(label="Add Door", command=self._add_new_door)
+            elif 'room_id' in data:
+                self.add_menu.add_command(label="Add Zone", command=lambda d=data: self._add_item_to_list(d, 'zones', self._get_template('zone', d)))
+            elif 'zone' in data:
+                self.add_menu.add_command(label="Add Object", command=lambda d=data: self._add_item_to_list(d, 'objects', self._get_template('object')))
+                self.add_menu.add_command(label="Add Exit", command=lambda d=data: self._add_item_to_list(d, 'exits', self._get_template('exit')))
+                if 'trap' not in data: self.add_menu.add_command(label="Add Trap", command=lambda d=data: self._add_item_as_dict_key(d, 'trap', self._get_template('trap')))
+            elif 'name' in data and 'door_ref' not in data:
+                self.add_menu.add_command(label="Add Action", command=lambda d=data: self._add_item_to_list(d, 'actions', self._get_template('action')))
+                if 'inventory' not in data: self.add_menu.add_command(label="Add Inventory", command=lambda d=data: self._add_item_to_list(d, 'inventory', []))
+                else: self.add_menu.add_command(label="Add Inventory Item", command=lambda d=data: self._add_item_to_list(d, 'inventory', self._get_template('inventory_item')))
+            elif 'door_id' in data:
+                self.add_menu.add_command(label="Add Action", command=lambda d=data: self._add_item_to_list(d, 'actions', self._get_template('action')))
+
+        if self.add_menu.index("end") is None:
+            self.add_menu.add_command(label="(Nothing to add here)", state="disabled")
+            
     def _add_new_room(self):
-        """Adds a new, blank room to the environment."""
-        rooms = self.game_manager.environment.rooms
-        i = 1
-        while f"new_room_{i}" in rooms:
-            i += 1
+        rooms, i = self.game_manager.environment.rooms, 1
+        while f"new_room_{i}" in rooms: i += 1
         new_id = f"new_room_{i}"
         rooms[new_id] = {"name": "New Room", "room_id": new_id, "zones": []}
         self.refresh_environment_tab()
 
     def _add_new_door(self):
-        """Adds a new, blank door to the environment."""
-        doors = self.game_manager.environment.doors
-        i = 1
-        while f"new_door_{i}" in doors:
-            i += 1
+        doors, i = self.game_manager.environment.doors, 1
+        while f"new_door_{i}" in doors: i += 1
         new_id = f"new_door_{i}"
-        doors[new_id] = {"name": "New Door", "door_id": new_id, "status": "closed", "description": ""}
+        doors[new_id] = {"name": "New Door", "door_id": new_id, "status": "closed", "actions": []}
         self.refresh_environment_tab()
 
-    def remove_env_item(self): # NEW
-        """Removes the selected element from the environment data."""
+    def remove_env_item(self):
         if not self.selected_env_item:
-            messagebox.showwarning("Warning", "No environment item selected to remove.")
-            return
-
-        parent = self.selected_env_item['parent']
-        data_to_remove = self.selected_env_item['data']
-
-        if isinstance(parent, list):
-            if messagebox.askyesno("Confirm", "Are you sure you want to permanently remove this item?"):
-                parent.remove(data_to_remove)
+            return messagebox.showwarning("Warning", "No environment item selected to remove.")
+        parent, data, key = self.selected_env_item['parent'], self.selected_env_item['data'], self.selected_env_item['key']
+        
+        msg = f"Are you sure you want to permanently remove '{key}'?" if isinstance(key, str) else "Are you sure you want to permanently remove this item?"
+        if messagebox.askyesno("Confirm Removal", msg):
+            try:
+                if isinstance(parent, list): parent.remove(data)
+                elif isinstance(parent, dict): del parent[key]
+                else: return messagebox.showerror("Error", "Cannot remove this type of element.")
                 self.refresh_environment_tab()
-        elif isinstance(parent, dict):
-             key_to_remove = self.selected_env_item['key']
-             if messagebox.askyesno("Confirm", f"Are you sure you want to permanently remove the element '{key_to_remove}'?"):
-                del parent[key_to_remove]
+            except (ValueError, KeyError):
+                messagebox.showerror("Error", "Could not remove the item.")
                 self.refresh_environment_tab()
-        else:
-            messagebox.showerror("Error", "Cannot remove this type of element. Only items within a list or dictionary can be removed.")
 
 if __name__ == "__main__":
     main_window = tk.Tk()
