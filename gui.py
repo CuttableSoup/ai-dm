@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox, scrolledtext, Frame, Entry, Button, Menu, f
 from character_creator import CharacterCreatorWindow
 import os
 import ast
-import json # <-- Added this import
+import json
 
 class GameGUI:
     """A simple graphical user interface for a text-based game."""
@@ -120,7 +120,7 @@ class GameGUI:
     def open_character_creator(self):
         """Opens the character creation tool window."""
         creator_win = CharacterCreatorWindow(self.root)
-        creator_win.grab_set() # This makes the creator window modal
+        creator_win.grab_set()
 
 
 class DebugWindow(tk.Toplevel):
@@ -161,9 +161,8 @@ class DebugWindow(tk.Toplevel):
         self.refresh_party_tab()
         self.refresh_environment_tab()
 
-    # --- Helper methods for the Inspector Tab ---
     def _on_mousewheel(self, event, canvas):
-        """Cross-platform mouse wheel scrolling that stops event propagation."""
+        """Cross-platform mouse wheel scrolling."""
         if event.num == 5 or event.delta == -120:
             canvas.yview_scroll(1, "units")
         elif event.num == 4 or event.delta == 120:
@@ -199,20 +198,17 @@ class DebugWindow(tk.Toplevel):
             pass
 
     def _add_structured_item(self, scrollable_frame, widget_list, template_dict, attr_name):
-        """Creates a new row of widgets for a structured list item."""
+        """Creates a new row of widgets for a structured list item (e.g., inventory)."""
         blank_item = {}
         for k, v in template_dict.items():
-            if k in ['name', 'item', 'id', 'spell', 'attitude', 'target']:
-                blank_item[k] = "default" if attr_name == 'attitudes' else "new item"
-            elif isinstance(v, str):
-                blank_item[k] = ""
+            if isinstance(v, str):
+                blank_item[k] = "new item"
             elif isinstance(v, int):
                 blank_item[k] = 0
             else:
                 blank_item[k] = False
         
-        equippable_attrs = ['inventory', 'spells', 'abilities']
-        if attr_name in equippable_attrs and 'equipped' not in blank_item:
+        if attr_name in ['inventory', 'spells', 'abilities'] and 'equipped' not in blank_item:
             blank_item['equipped'] = False
             
         self._create_structured_list_row(scrollable_frame, blank_item, widget_list, attr_name)
@@ -233,15 +229,12 @@ class DebugWindow(tk.Toplevel):
         right_frame = Frame(row_frame)
         right_frame.pack(side=tk.RIGHT)
 
-        equippable_attrs = ['inventory', 'spells', 'abilities']
-        if attr_name in equippable_attrs and 'equipped' not in item_dict:
-            item_dict['equipped'] = False
-
         for key, val in item_dict.items():
             parent = right_frame if key in ['quantity', 'equipped'] else left_frame
             self._create_widget_for_kv(parent, key, val, item_widgets)
 
-        remove_button = Button(right_frame, text="X", fg="red", command=lambda wl=widget_list, rf=row_frame, iw=item_widgets: self._remove_structured_item(wl, rf, iw))
+        remove_button = Button(right_frame, text="X", fg="red",
+                               command=lambda wl=widget_list, rf=row_frame, iw=item_widgets: self._remove_structured_item(wl, rf, iw))
         remove_button.pack(side=tk.RIGHT, padx=5, pady=2)
 
         widget_list.append(item_widgets)
@@ -251,21 +244,14 @@ class DebugWindow(tk.Toplevel):
         widget_frame = Frame(parent_frame)
         widget_frame.pack(side=tk.LEFT, padx=5, pady=2)
 
-        # FIX: Ensure name-like keys are always editable Entry widgets
-        if key in ['name', 'item', 'id', 'spell', 'attitude', 'target']:
-            tk.Label(widget_frame, text=f"{key}:").pack(side=tk.LEFT)
-            entry = Entry(widget_frame, width=15)
-            entry.insert(0, str(val))
-            entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-            item_widgets_dict[key] = entry
-        elif isinstance(val, bool) or key == 'equipped':
-            tk.Label(widget_frame, text=f"{key}:").pack(side=tk.LEFT)
+        tk.Label(widget_frame, text=f"{key}:").pack(side=tk.LEFT)
+
+        if isinstance(val, bool) or key == 'equipped':
             bool_var = tk.BooleanVar(value=bool(val))
             chk = tk.Checkbutton(widget_frame, variable=bool_var)
             chk.pack(side=tk.LEFT)
             item_widgets_dict[key] = bool_var
         elif isinstance(val, int):
-            tk.Label(widget_frame, text=f"{key}:").pack(side=tk.LEFT)
             qty_entry = Entry(widget_frame, width=4)
             qty_entry.insert(0, str(val))
             minus_btn = Button(widget_frame, text="-", command=lambda e=qty_entry: self._change_quantity(e, -1))
@@ -275,13 +261,44 @@ class DebugWindow(tk.Toplevel):
             plus_btn.pack(side=tk.LEFT)
             item_widgets_dict[key] = qty_entry
         else:
-            tk.Label(widget_frame, text=f"{key}:").pack(side=tk.LEFT)
             entry = Entry(widget_frame, width=15)
             entry.insert(0, str(val))
             entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
             item_widgets_dict[key] = entry
 
-    # --- Tab 1: Object Inspector ---
+    def _create_dict_row(self, parent_frame, key, value, widget_list):
+        """Creates a single editable row for the attitudes editor."""
+        row_frame = Frame(parent_frame)
+        row_frame.pack(fill="x", expand=True, pady=1)
+        
+        key_entry = Entry(row_frame, font=("Arial", 10))
+        key_entry.insert(0, str(key))
+        key_entry.pack(side="left", fill="x", expand=True)
+
+        tk.Label(row_frame, text=":", font=("Arial", 10, "bold")).pack(side="left", padx=3)
+
+        val_entry = Entry(row_frame, font=("Arial", 10))
+        val_entry.insert(0, str(value))
+        val_entry.pack(side="left", fill="x", expand=True)
+        
+        widget_tuple = (key_entry, val_entry)
+        
+        remove_button = Button(row_frame, text="X", fg="red", relief="flat",
+                               command=lambda rf=row_frame, wt=widget_tuple, wl=widget_list: self._remove_dict_item(rf, wt, wl))
+        remove_button.pack(side="left", padx=5)
+
+        widget_list.append(widget_tuple)
+
+    def _add_dict_item(self, parent_frame, widget_list):
+        """Adds a new, blank key-value entry row to the attitudes editor."""
+        self._create_dict_row(parent_frame, "Name", "Neutral", widget_list)
+
+    def _remove_dict_item(self, row_frame, widget_tuple, widget_list):
+        """Removes a row from the attitudes editor UI."""
+        row_frame.destroy()
+        if widget_tuple in widget_list:
+            widget_list.remove(widget_tuple)
+
     def _create_inspector_tab(self):
         self.displayed_entities, self.selected_entity, self.attribute_widgets = [], None, {}
         paned_window = tk.PanedWindow(self.tab_inspector, orient=tk.HORIZONTAL)
@@ -331,12 +348,36 @@ class DebugWindow(tk.Toplevel):
             value = getattr(self.selected_entity, attr_name)
             tk.Label(self.details_frame, text=attr_name).grid(row=i, column=0, sticky="nw", padx=5, pady=5)
             
-            if isinstance(value, list) and value:
+            if attr_name == 'attitudes':
+                normalized_attitudes = {}
+                if isinstance(value, list):
+                    for item_dict in value:
+                        if isinstance(item_dict, dict):
+                            normalized_attitudes.update(item_dict)
+                elif isinstance(value, dict):
+                    normalized_attitudes = value
+                
+                value = normalized_attitudes
+                
+                main_container = Frame(self.details_frame, bd=1, relief=tk.SOLID)
+                main_container.grid(row=i, column=1, sticky="ew", padx=2, pady=2)
+                items_frame = Frame(main_container)
+                items_frame.pack(fill="x", expand=True, padx=2, pady=2)
+
+                sub_widgets = []
+                for key, val in value.items():
+                    self._create_dict_row(items_frame, key, val, sub_widgets)
+
+                add_button = Button(main_container, text="+ Add Attitude", command=lambda f=items_frame, w=sub_widgets: self._add_dict_item(f, w))
+                add_button.pack(fill="x", expand=True, side="bottom")
+
+                self.attribute_widgets[attr_name] = sub_widgets
+            
+            elif isinstance(value, list) and value:
                 if isinstance(value[0], dict):
                     main_container = Frame(self.details_frame, bd=1, relief=tk.SOLID)
                     main_container.grid(row=i, column=1, sticky="ew", padx=2, pady=2)
                     main_container.grid_columnconfigure(0, weight=1)
-                    
                     list_canvas = tk.Canvas(main_container, height=150, bd=0, highlightthickness=0)
                     list_scrollbar = tk.Scrollbar(main_container, orient="vertical", command=list_canvas.yview)
                     scrollable_frame = Frame(list_canvas)
@@ -346,24 +387,18 @@ class DebugWindow(tk.Toplevel):
                     list_canvas.grid(row=0, column=0, sticky="nsew")
                     list_scrollbar.grid(row=0, column=1, sticky="ns")
                     main_container.grid_rowconfigure(0, weight=1)
-
                     item_widget_list = []
                     self.attribute_widgets[attr_name] = item_widget_list
                     for item_dict in value:
                         self._create_structured_list_row(scrollable_frame, item_dict, item_widget_list, attr_name)
-                    
                     self._bind_scroll_recursive(scrollable_frame, list_canvas)
-
                     template = value[0] if value else {}
                     add_button = Button(main_container, text="+ Add New Item", command=lambda sf=scrollable_frame, iwl=item_widget_list, t=template, an=attr_name: self._add_structured_item(sf, iwl, t, an))
                     add_button.grid(row=1, column=0, columnspan=2, sticky="ew")
-                
                 else:
                     self._create_simple_list_ui(self.details_frame, i, value, attr_name)
-
             elif isinstance(value, list):
                  self._create_simple_list_ui(self.details_frame, i, value, attr_name)
-
             elif isinstance(value, dict):
                 dict_frame = Frame(self.details_frame, bd=1, relief=tk.SOLID)
                 dict_frame.grid(row=i, column=1, sticky="ew", padx=2, pady=2)
@@ -376,7 +411,6 @@ class DebugWindow(tk.Toplevel):
                     entry.grid(row=j, column=1, sticky="ew", padx=2, pady=2)
                     sub_entries[key] = entry
                 self.attribute_widgets[attr_name] = sub_entries
-
             else:
                 widget = Entry(self.details_frame)
                 widget.insert(0, str(value))
@@ -416,8 +450,18 @@ class DebugWindow(tk.Toplevel):
         for attr, collection in self.attribute_widgets.items():
             orig_val = getattr(self.selected_entity, attr, None)
             try:
-                if isinstance(collection, list) and isinstance(orig_val, list):
-                    if collection and isinstance(collection[0], dict): # Check based on widget structure
+                if attr == 'attitudes':
+                    new_dict = {}
+                    if isinstance(collection, list):
+                        for (key_entry, val_entry) in collection:
+                            key = key_entry.get().strip()
+                            val = val_entry.get().strip()
+                            if key:
+                                new_dict[key] = val
+                    setattr(self.selected_entity, attr, new_dict)
+
+                elif isinstance(collection, list) and isinstance(orig_val, list):
+                    if collection and isinstance(collection[0], dict):
                         new_list_of_dicts = []
                         for item_widget_dict in collection:
                             new_item_dict = {}
@@ -425,12 +469,10 @@ class DebugWindow(tk.Toplevel):
                                 val = None
                                 if isinstance(widget, tk.BooleanVar): val = widget.get()
                                 elif isinstance(widget, Entry): val = widget.get()
-                                else: val = widget # Raw, uneditable value like a name
+                                else: val = widget
                                 new_item_dict[key] = val
-                            
-                            # Try to convert types back based on original template
                             if orig_val:
-                                template_dict = orig_val[0]
+                                template_dict = orig_val[0] if orig_val else {}
                                 for key in new_item_dict:
                                     if key in template_dict:
                                         orig_type = type(template_dict.get(key, ''))
@@ -440,21 +482,18 @@ class DebugWindow(tk.Toplevel):
                                                 new_item_dict[key] = str(current_val).lower() in ('true', '1', 'yes')
                                             elif type(current_val) is not orig_type:
                                                 new_item_dict[key] = orig_type(current_val)
-                                        except (ValueError, TypeError):
-                                            pass # Keep as string if conversion fails
+                                        except (ValueError, TypeError): pass
                             new_list_of_dicts.append(new_item_dict)
                         setattr(self.selected_entity, attr, new_list_of_dicts)
-                    
-                    else: # Simple list of entry widgets
+                    else:
                         new_list = []
                         item_type = str
-                        if orig_val and orig_val[0] is not None: item_type = type(orig_val[0])
+                        if orig_val and len(orig_val) > 0 and orig_val[0] is not None: item_type = type(orig_val[0])
                         for entry_widget in collection:
                             val_str = entry_widget.get()
                             try: new_list.append(item_type(val_str))
                             except (ValueError, TypeError): new_list.append(val_str)
                         setattr(self.selected_entity, attr, new_list)
-
                 elif isinstance(collection, dict) and isinstance(orig_val, dict):
                     new_dict = {}
                     for key, entry_widget in collection.items():
@@ -463,21 +502,18 @@ class DebugWindow(tk.Toplevel):
                         try: new_dict[key] = orig_type(val_str)
                         except (ValueError, TypeError): new_dict[key] = val_str
                     setattr(self.selected_entity, attr, new_dict)
-
                 elif isinstance(collection, Entry):
                     val_str = collection.get()
                     if isinstance(orig_val, bool): new_val = val_str.lower() in ('true', '1', 'yes')
                     elif orig_val is None: new_val = val_str if val_str.lower() != 'none' else None
                     else: new_val = type(orig_val)(val_str)
                     setattr(self.selected_entity, attr, new_val)
-
             except Exception as e:
                 print(f"Could not save attribute '{attr}'. Error: {e}")
 
         print(f"Updated attributes for {self.selected_entity.name}")
         self.show_entity_details()
 
-    # --- Tab 2: Initiative ---
     def _create_initiative_tab(self):
         self.initiative_text = scrolledtext.ScrolledText(self.tab_initiative, wrap=tk.WORD, state='disabled', font=("Courier", 10))
         self.initiative_text.pack(fill="both", expand=True)
@@ -491,7 +527,6 @@ class DebugWindow(tk.Toplevel):
         self.initiative_text.insert('1.0', initiative_str)
         self.initiative_text.config(state='disabled')
 
-    # --- Tab 3: Game History ---
     def _create_history_tab(self):
         self.history_text = scrolledtext.ScrolledText(self.tab_history, wrap=tk.WORD, state='disabled')
         self.history_text.pack(fill="both", expand=True)
@@ -505,7 +540,6 @@ class DebugWindow(tk.Toplevel):
         self.history_text.insert('1.0', history_str)
         self.history_text.config(state='disabled')
         
-    # --- Tab 4: Party ---
     def _create_party_tab(self):
         self.party_text = scrolledtext.ScrolledText(self.tab_party, wrap=tk.WORD, state='disabled', font=("Courier", 10))
         self.party_text.pack(fill="both", expand=True)
@@ -522,7 +556,6 @@ class DebugWindow(tk.Toplevel):
         self.party_text.insert('1.0', party_status)
         self.party_text.config(state='disabled')
 
-    # --- Tab 5: Environment ---
     def _create_environment_tab(self):
         self.env_tree = ttk.Treeview(self.tab_environment)
         self.env_tree.pack(fill="both", expand=True)
@@ -530,55 +563,6 @@ class DebugWindow(tk.Toplevel):
 
     def refresh_environment_tab(self):
         if not self.game_manager.turn_order: return
-        for i in self.env_tree.get_children(): self.env_tree.delete(i)
-        env = self.game_manager.environment
-        rooms_node = self.env_tree.insert("", "end", text="Rooms", open=False)
-        doors_node = self.env_tree.insert("", "end", text="Doors", open=False)
-        for room_id, room_data in env.rooms.items():
-            room_node = self.env_tree.insert(rooms_node, "end", text=f"{room_id}: {room_data.get('name', 'N/A')}")
-            for key, val in room_data.items():
-                self.env_tree.insert(room_node, "end", text=f"{key}: {str(val)[:100]}")
-        for door_id, door_data in env.doors.items():
-            door_node = self.env_tree.insert(doors_node, "end", text=f"{door_id}: {door_data.get('name', 'N/A')}")
-            for key, val in door_data.items():
-                self.env_tree.insert(door_node, "end", text=f"{key}: {str(val)[:100]}")
-
-    # --- Tab 2: Game History (Refresh Button Removed) ---
-    def _create_history_tab(self):
-        self.history_text = scrolledtext.ScrolledText(self.tab_history, wrap=tk.WORD, state='disabled')
-        self.history_text.pack(fill="both", expand=True)
-        self.refresh_history_tab()
-
-    def refresh_history_tab(self):
-        self.history_text.config(state='normal')
-        self.history_text.delete('1.0', tk.END)
-        history_str = self.game_manager.game_history.get_history_string()
-        self.history_text.insert('1.0', history_str)
-        self.history_text.config(state='disabled')
-        
-    # --- Tab 3: Party (Refresh Button Removed) ---
-    def _create_party_tab(self):
-        self.party_text = scrolledtext.ScrolledText(self.tab_party, wrap=tk.WORD, state='disabled', font=("Courier", 10))
-        self.party_text.pack(fill="both", expand=True)
-        self.refresh_party_tab()
-
-    def refresh_party_tab(self):
-        party = self.game_manager.party
-        party_status = f"Party Name: {party.name}\n\n"
-        party_status += "--- Members ---\n"
-        party_status += party.get_party_status()
-        self.party_text.config(state='normal')
-        self.party_text.delete('1.0', tk.END)
-        self.party_text.insert('1.0', party_status)
-        self.party_text.config(state='disabled')
-
-    # --- Tab 4: Environment (Refresh Button Removed) ---
-    def _create_environment_tab(self):
-        self.env_tree = ttk.Treeview(self.tab_environment)
-        self.env_tree.pack(fill="both", expand=True)
-        self.refresh_environment_tab()
-
-    def refresh_environment_tab(self):
         for i in self.env_tree.get_children(): self.env_tree.delete(i)
         env = self.game_manager.environment
         rooms_node = self.env_tree.insert("", "end", text="Rooms", open=False)
