@@ -151,7 +151,7 @@ class DebugWindow(tk.Toplevel):
         self._create_initiative_tab()
         self._create_history_tab()
         self._create_party_tab()
-        self._create_environment_tab()
+        self._create_environment_tab() # MODIFIED: This function is now much more complex
 
     def refresh_all_tabs(self):
         """Refreshes the content of all tabs in the debug panel."""
@@ -555,26 +555,318 @@ class DebugWindow(tk.Toplevel):
         self.party_text.delete('1.0', tk.END)
         self.party_text.insert('1.0', party_status)
         self.party_text.config(state='disabled')
+        
+    # --- ENVIRONMENT TAB METHODS START HERE ---
 
-    def _create_environment_tab(self):
-        self.env_tree = ttk.Treeview(self.tab_environment)
+    def _get_descriptive_name(self, item, index):
+        """Finds a descriptive name for an item from a list for display in the tree."""
+        item_node_name = f"Item {index+1}"
+        if isinstance(item, dict):
+            if 'name' in item:
+                item_node_name = item['name']
+            elif 'zone' in item:
+                item_node_name = f"Zone {item['zone']}"
+            elif 'skill' in item:
+                item_node_name = f"Action: {item['skill']}"
+            elif 'door_ref' in item:
+                item_node_name = f"Exit via {item['door_ref']}"
+        return item_node_name
+        
+    def _add_node_to_tree(self, parent_node_id, parent_data, data, key_name=""):
+        """
+        Recursively adds data to the Treeview, mapping each node to its underlying data object.
+        It now only adds nodes for structural elements (dicts and lists), not primitive values.
+        """
+        node_id = None
+        if isinstance(data, dict):
+            # Use a more descriptive name for certain keys
+            node_text = key_name
+            if key_name == 'trap':
+                node_text = f"Trap: {data.get('name', 'Unnamed Trap')}"
+            
+            node_id = self.env_tree.insert(parent_node_id, "end", text=node_text, open=False)
+            self.tree_item_map[node_id] = {'data': data, 'parent': parent_data, 'key': key_name}
+            # Recurse into the dictionary's values
+            for key, value in data.items():
+                self._add_node_to_tree(node_id, data, value, key_name=key)
+
+        elif isinstance(data, list):
+            # Special "flattened" lists whose items are added directly to the parent node
+            if key_name in ['objects', 'exits', 'actions', 'zones']:
+                for i, item in enumerate(data):
+                    item_node_name = self._get_descriptive_name(item, i)
+                    # The parent is the list itself (data), and the key is its index (i)
+                    self._add_node_to_tree(parent_node_id, data, item, key_name=item_node_name)
+            else:
+                # For all other lists, create a container node
+                node_id = self.env_tree.insert(parent_node_id, "end", text=key_name, open=False)
+                self.tree_item_map[node_id] = {'data': data, 'parent': parent_data, 'key': key_name}
+                for i, item in enumerate(data):
+                    item_node_name = self._get_descriptive_name(item, i)
+                    self._add_node_to_tree(node_id, data, item, key_name=item_node_name)
+        else:
+            # This block is intentionally left empty. We no longer create leaf nodes
+            # in the tree for simple values (strings, numbers, etc.). They will be
+            # visible and editable in the right-hand panel when their parent
+            # dictionary is selected.
+            pass
+
+    def _create_environment_tab(self): # MODIFIED
+        """Creates the two-panel layout for the environment editor."""
+        self.tree_item_map = {}
+        self.selected_env_item = None
+        self.env_attribute_widgets = {}
+
+        paned_window = tk.PanedWindow(self.tab_environment, orient=tk.HORIZONTAL)
+        paned_window.pack(fill=tk.BOTH, expand=True)
+
+        # Left pane: Treeview
+        left_frame = Frame(paned_window, bd=2, relief=tk.SUNKEN)
+        self.env_tree = ttk.Treeview(left_frame)
+        tree_scrollbar = ttk.Scrollbar(left_frame, orient="vertical", command=self.env_tree.yview)
+        self.env_tree.configure(yscrollcommand=tree_scrollbar.set)
+        tree_scrollbar.pack(side="right", fill="y")
         self.env_tree.pack(fill="both", expand=True)
+        self.env_tree.bind("<<TreeviewSelect>>", self.show_env_details)
+        paned_window.add(left_frame, width=300)
+
+        # Right pane: Details editor
+        right_frame = Frame(paned_window, bd=2, relief=tk.SUNKEN)
+        self.env_canvas = tk.Canvas(right_frame)
+        details_scrollbar = tk.Scrollbar(right_frame, orient="vertical", command=self.env_canvas.yview)
+        self.env_details_frame = Frame(self.env_canvas)
+        self.env_details_frame.bind("<Configure>", lambda e: self.env_canvas.configure(scrollregion=self.env_canvas.bbox("all")))
+        self.env_canvas.create_window((0, 0), window=self.env_details_frame, anchor="nw")
+        self.env_canvas.configure(yscrollcommand=details_scrollbar.set)
+        self.env_canvas.pack(side="left", fill="both", expand=True)
+        details_scrollbar.pack(side="right", fill="y")
+        paned_window.add(right_frame)
+        
+        # MODIFIED: Updated button layout for more flexible adding
+        button_frame = Frame(self.tab_environment)
+        button_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=5)
+        Button(button_frame, text="Save Changes", command=self.save_env_details).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+        
+        # Context-sensitive add button
+        Button(button_frame, text="Add to Selected", command=self.add_item_to_selection).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+
+        # Top-level add button with a menu
+        add_toplevel_button = ttk.Menubutton(button_frame, text="Add Top-Level")
+        top_level_menu = Menu(add_toplevel_button, tearoff=0)
+        top_level_menu.add_command(label="Room", command=self._add_new_room)
+        top_level_menu.add_command(label="Door", command=self._add_new_door)
+        add_toplevel_button["menu"] = top_level_menu
+        add_toplevel_button.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+
+        Button(button_frame, text="Remove Selected", fg="red", command=self.remove_env_item).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+        
         self.refresh_environment_tab()
 
-    def refresh_environment_tab(self):
+    def refresh_environment_tab(self): # MODIFIED
+        """Refreshes the environment tree view and clears the selection map."""
+        # You can now remove the print() statement you added for debugging.
+        
         if not self.game_manager.turn_order: return
-        for i in self.env_tree.get_children(): self.env_tree.delete(i)
+        for i in self.env_tree.get_children():
+            self.env_tree.delete(i)
+        self.tree_item_map.clear()
+        
+        for widget in self.env_details_frame.winfo_children():
+            widget.destroy()
+        self.selected_env_item = None
+
         env = self.game_manager.environment
-        rooms_node = self.env_tree.insert("", "end", text="Rooms", open=False)
-        doors_node = self.env_tree.insert("", "end", text="Doors", open=False)
-        for room_id, room_data in env.rooms.items():
-            room_node = self.env_tree.insert(rooms_node, "end", text=f"{room_id}: {room_data.get('name', 'N/A')}")
-            for key, val in room_data.items():
-                self.env_tree.insert(room_node, "end", text=f"{key}: {str(val)[:100]}")
-        for door_id, door_data in env.doors.items():
-            door_node = self.env_tree.insert(doors_node, "end", text=f"{door_id}: {door_data.get('name', 'N/A')}")
-            for key, val in door_data.items():
-                self.env_tree.insert(door_node, "end", text=f"{key}: {str(val)[:100]}")
+        
+        # MODIFIED: Changed to handle a dictionary of rooms
+        if hasattr(env, 'rooms') and isinstance(env.rooms, dict):
+            rooms_root_node = self.env_tree.insert("", "end", text="Rooms", open=True)
+            self.tree_item_map[rooms_root_node] = {'data': env.rooms, 'parent': env, 'key': 'rooms'}
+            # MODIFIED: Switched from enumerate to .items() for dictionary iteration
+            for room_id, room_data in env.rooms.items():
+                room_name = room_data.get('name', room_id)
+                self._add_node_to_tree(rooms_root_node, env.rooms, room_data, key_name=f"{room_id}: {room_name}")
+
+        # MODIFIED: Changed to handle a dictionary of doors
+        if hasattr(env, 'doors') and isinstance(env.doors, dict):
+            doors_root_node = self.env_tree.insert("", "end", text="Doors", open=False)
+            self.tree_item_map[doors_root_node] = {'data': env.doors, 'parent': env, 'key': 'doors'}
+            # MODIFIED: Switched from enumerate to .items() for dictionary iteration
+            for door_id, door_data in env.doors.items():
+                door_name = door_data.get('name', door_id)
+                self._add_node_to_tree(doors_root_node, env.doors, door_data, key_name=f"{door_id}: {door_name}")
+
+    def show_env_details(self, event=None): # MODIFIED
+        """Displays editable widgets for the selected environment item."""
+        selection = self.env_tree.selection()
+        if not selection: return
+        
+        selected_id = selection[0]
+        self.selected_env_item = self.tree_item_map.get(selected_id)
+        if not self.selected_env_item: return
+
+        for widget in self.env_details_frame.winfo_children():
+            widget.destroy()
+        self.env_attribute_widgets.clear()
+        
+        data = self.selected_env_item['data']
+        
+        self.env_details_frame.grid_columnconfigure(1, weight=1)
+        self._bind_scroll_recursive(self.env_details_frame, self.env_canvas)
+
+        if isinstance(data, dict):
+            i = 0
+            for key, value in data.items():
+                tk.Label(self.env_details_frame, text=key).grid(row=i, column=0, sticky="nw", padx=5, pady=2)
+
+                # MODIFIED: Use a larger Text widget for descriptions
+                if key == 'description':
+                    widget = tk.Text(self.env_details_frame, height=4, wrap=tk.WORD)
+                    widget.insert("1.0", str(value))
+                    widget.grid(row=i, column=1, sticky="ew", padx=5, pady=2)
+                    self.env_attribute_widgets[key] = widget
+                    i += 1
+                elif isinstance(value, (str, int, float, bool)):
+                    widget = Entry(self.env_details_frame)
+                    widget.insert(0, str(value))
+                    widget.grid(row=i, column=1, sticky="ew", padx=5, pady=2)
+                    self.env_attribute_widgets[key] = widget
+                    i += 1
+                else:
+                    # For complex types (lists/dicts), just display their type as non-editable
+                    tk.Label(self.env_details_frame, text=f"<{type(value).__name__}> (Select in tree to edit)").grid(row=i, column=1, sticky="w", padx=5, pady=2)
+                    i += 1
+        elif isinstance(data, (str, int, float, bool)):
+             key = self.selected_env_item['key']
+             tk.Label(self.env_details_frame, text=f"Value for '{key}'").grid(row=0, column=0, sticky="nw", padx=5, pady=2)
+             entry = Entry(self.env_details_frame)
+             entry.insert(0, str(data))
+             entry.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
+             self.env_attribute_widgets['value'] = entry
+
+    def save_env_details(self): # MODIFIED
+        """Saves changes from the editor back to the environment data."""
+        if not self.selected_env_item:
+            messagebox.showwarning("Warning", "No environment item selected.")
+            return
+
+        data = self.selected_env_item['data']
+        parent = self.selected_env_item['parent']
+        key = self.selected_env_item['key']
+
+        if isinstance(data, dict):
+            for attr_key, widget in self.env_attribute_widgets.items():
+                if attr_key in data:
+                    new_val_str = ""
+                    # MODIFIED: Correctly get value from either Text or Entry widget
+                    if isinstance(widget, tk.Text):
+                        new_val_str = widget.get("1.0", tk.END).strip()
+                    else: # It's an Entry widget
+                        new_val_str = widget.get()
+
+                    orig_type = type(data[attr_key])
+                    try:
+                        if orig_type is bool:
+                            data[attr_key] = new_val_str.lower() in ('true', '1', 'yes')
+                        else:
+                            data[attr_key] = orig_type(new_val_str)
+                    except (ValueError, TypeError):
+                        messagebox.showerror("Save Error", f"Invalid value for '{attr_key}'. Could not convert '{new_val_str}' to {orig_type.__name__}.")
+                        return
+        elif 'value' in self.env_attribute_widgets:
+            widget = self.env_attribute_widgets['value']
+            new_val_str = widget.get()
+            orig_type = type(data)
+            try:
+                if isinstance(parent, dict):
+                    if orig_type is bool: parent[key] = new_val_str.lower() in ('true', '1', 'yes')
+                    else: parent[key] = orig_type(new_val_str)
+                elif isinstance(parent, list):
+                    if orig_type is bool: parent[key] = new_val_str.lower() in ('true', '1', 'yes')
+                    else: parent[key] = orig_type(new_val_str)
+            except (ValueError, TypeError):
+                 messagebox.showerror("Save Error", f"Invalid value. Could not convert '{new_val_str}' to {orig_type.__name__}.")
+                 return
+        
+        messagebox.showinfo("Success", "Changes saved successfully.")
+        self.refresh_environment_tab()
+
+    # RENAMED from add_env_item
+    def add_item_to_selection(self):
+        """Adds a new element as a child of the current selection (context-sensitive)."""
+        if not self.selected_env_item:
+            messagebox.showwarning("Warning", "Select an element (like a Room or Zone) to add to.")
+            return
+
+        data = self.selected_env_item['data']
+        key = self.selected_env_item['key']
+
+        # Determine where to add the new item based on selection
+        target_list = None
+        template = None
+        
+        if isinstance(data, dict) and 'zones' in data: # It's a room
+             if not isinstance(data.get('zones'), list): data['zones'] = []
+             target_list = data['zones']
+             template = {"zone": len(target_list) + 1, "description": "A new zone.", "objects": [], "exits": []}
+        elif isinstance(data, dict) and 'objects' in data: # It's a zone
+             if not isinstance(data.get('objects'), list): data['objects'] = []
+             target_list = data['objects']
+             template = { "name": "New Object", "description": "A new object.", "actions": [] }
+        elif key == 'rooms' and isinstance(data, dict): # Top-level "Rooms" category is selected
+            self._add_new_room()
+            return
+        elif key == 'doors' and isinstance(data, dict): # Top-level "Doors" category is selected
+            self._add_new_door()
+            return
+
+        if template and target_list is not None:
+            target_list.append(template)
+            self.refresh_environment_tab()
+        else:
+            messagebox.showinfo("Info", "Cannot add a child to this type of element. Select a Room, Zone, or main category.")
+            return
+    
+    # NEW helper methods for the Top-Level menu
+    def _add_new_room(self):
+        """Adds a new, blank room to the environment."""
+        rooms = self.game_manager.environment.rooms
+        i = 1
+        while f"new_room_{i}" in rooms:
+            i += 1
+        new_id = f"new_room_{i}"
+        rooms[new_id] = {"name": "New Room", "room_id": new_id, "zones": []}
+        self.refresh_environment_tab()
+
+    def _add_new_door(self):
+        """Adds a new, blank door to the environment."""
+        doors = self.game_manager.environment.doors
+        i = 1
+        while f"new_door_{i}" in doors:
+            i += 1
+        new_id = f"new_door_{i}"
+        doors[new_id] = {"name": "New Door", "door_id": new_id, "status": "closed", "description": ""}
+        self.refresh_environment_tab()
+
+    def remove_env_item(self): # NEW
+        """Removes the selected element from the environment data."""
+        if not self.selected_env_item:
+            messagebox.showwarning("Warning", "No environment item selected to remove.")
+            return
+
+        parent = self.selected_env_item['parent']
+        data_to_remove = self.selected_env_item['data']
+
+        if isinstance(parent, list):
+            if messagebox.askyesno("Confirm", "Are you sure you want to permanently remove this item?"):
+                parent.remove(data_to_remove)
+                self.refresh_environment_tab()
+        elif isinstance(parent, dict):
+             key_to_remove = self.selected_env_item['key']
+             if messagebox.askyesno("Confirm", f"Are you sure you want to permanently remove the element '{key_to_remove}'?"):
+                del parent[key_to_remove]
+                self.refresh_environment_tab()
+        else:
+            messagebox.showerror("Error", "Cannot remove this type of element. Only items within a list or dictionary can be removed.")
 
 if __name__ == "__main__":
     main_window = tk.Tk()
