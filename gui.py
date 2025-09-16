@@ -208,8 +208,12 @@ class DebugWindow(tk.Toplevel):
             else:
                 blank_item[k] = False
         
-        if attr_name in ['inventory', 'spells', 'abilities'] and 'equipped' not in blank_item:
-            blank_item['equipped'] = False
+        # Ensure any object that should have an equipped status gets one
+        equipped_keys = ['equipped', 'prepared']
+        has_equipped_key = any(key in blank_item for key in equipped_keys)
+        if not has_equipped_key:
+            key_name = 'prepared' if attr_name == 'spells' else 'equipped'
+            blank_item[key_name] = False
             
         self._create_structured_list_row(scrollable_frame, blank_item, widget_list, attr_name)
 
@@ -229,8 +233,18 @@ class DebugWindow(tk.Toplevel):
         right_frame = Frame(row_frame)
         right_frame.pack(side=tk.RIGHT)
 
-        for key, val in item_dict.items():
-            parent = right_frame if key in ['quantity', 'equipped'] else left_frame
+        # UNIVERSAL CHECK: Ensure any dictionary item gets an equipped/prepared key if it lacks one.
+        equipped_keys = ['equipped', 'prepared']
+        has_equipped_key = any(key in item_dict for key in equipped_keys)
+        if isinstance(item_dict, dict) and not has_equipped_key:
+            key_to_add = 'prepared' if attr_name == 'spells' else 'equipped'
+            item_dict[key_to_add] = False
+
+        # Sort to ensure the equipped checkbox always appears on the far right
+        sorted_items = sorted(item_dict.items(), key=lambda x: x[0] not in equipped_keys and x[0] != 'quantity')
+        
+        for key, val in sorted_items:
+            parent = right_frame if key in equipped_keys or key == 'quantity' else left_frame
             self._create_widget_for_kv(parent, key, val, item_widgets)
 
         remove_button = Button(right_frame, text="X", fg="red",
@@ -246,7 +260,7 @@ class DebugWindow(tk.Toplevel):
 
         tk.Label(widget_frame, text=f"{key}:").pack(side=tk.LEFT)
 
-        if isinstance(val, bool) or key == 'equipped':
+        if isinstance(val, bool) or key in ['equipped', 'prepared']:
             bool_var = tk.BooleanVar(value=bool(val))
             chk = tk.Checkbutton(widget_frame, variable=bool_var)
             chk.pack(side=tk.LEFT)
@@ -331,79 +345,6 @@ class DebugWindow(tk.Toplevel):
             if hasattr(entity, 'location') and entity.location == current_actor.location:
                 self.displayed_entities.append(entity)
                 self.entity_listbox.insert(tk.END, f"{entity.__class__.__name__}: {entity.name}")
-    
-    # --- NEW INVENTORY UI METHODS ---
-
-    def _create_inventory_ui(self, parent, row_index, inventory_list):
-        """Creates a custom UI for editing an inventory list."""
-        main_container = Frame(parent, bd=1, relief=tk.SOLID)
-        main_container.grid(row=row_index, column=1, sticky="ew", padx=2, pady=2)
-        
-        # Canvas for scrollable content
-        list_canvas = tk.Canvas(main_container, height=150)
-        list_scrollbar = tk.Scrollbar(main_container, orient="vertical", command=list_canvas.yview)
-        scrollable_frame = Frame(list_canvas)
-        scrollable_frame.bind("<Configure>", lambda e, c=list_canvas: c.configure(scrollregion=c.bbox("all")))
-        list_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        list_canvas.configure(yscrollcommand=list_scrollbar.set)
-        
-        list_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        list_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        self._bind_scroll_recursive(scrollable_frame, list_canvas)
-
-        item_widget_list = []
-        for item_dict in inventory_list:
-            self._create_inventory_row(scrollable_frame, item_dict, item_widget_list)
-        
-        self.attribute_widgets['inventory'] = item_widget_list
-
-        add_button = Button(main_container, text="Add New Item", command=self._add_inventory_item)
-        add_button.pack(side=tk.BOTTOM, fill=tk.X)
-
-    def _create_inventory_row(self, parent_frame, item_dict, widget_list):
-        """Creates a single row in the inventory editor UI."""
-        row_frame = Frame(parent_frame, padx=2, pady=2)
-        row_frame.pack(fill=tk.X, expand=True)
-
-        tk.Label(row_frame, text="Item:").pack(side=tk.LEFT)
-        item_entry = Entry(row_frame)
-        item_entry.insert(0, item_dict.get('item', ''))
-        item_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
-
-        tk.Label(row_frame, text="Quantity:").pack(side=tk.LEFT)
-        qty_entry = Entry(row_frame, width=5)
-        qty_entry.insert(0, item_dict.get('quantity', 1))
-        qty_entry.pack(side=tk.LEFT, padx=(0, 10))
-
-        remove_button = Button(row_frame, text="X", fg="red",
-                               command=lambda rf=row_frame, data=item_dict: self._remove_inventory_item(rf, data))
-        remove_button.pack(side=tk.LEFT)
-
-        widget_list.append({'item_entry': item_entry, 'qty_entry': qty_entry})
-
-    def _add_inventory_item(self):
-        """Adds a blank item to the selected entity's inventory and refreshes the UI."""
-        if not self.selected_entity or not hasattr(self.selected_entity, 'inventory'):
-            return
-        
-        new_item = {'item': 'new_item', 'quantity': 1}
-        self.selected_entity.inventory.append(new_item)
-        
-        # Refresh the entire details view to show the new item
-        self.show_entity_details()
-
-    def _remove_inventory_item(self, row_frame, item_data_dict):
-        """Removes an item from the UI and the underlying data."""
-        if not self.selected_entity or not hasattr(self.selected_entity, 'inventory'):
-            return
-            
-        # Remove from the data
-        if item_data_dict in self.selected_entity.inventory:
-            self.selected_entity.inventory.remove(item_data_dict)
-        
-        # Refresh the UI. This is simpler than trying to manage widget lists manually.
-        self.show_entity_details()
 
     def show_entity_details(self, event=None):
         sel_indices = self.entity_listbox.curselection()
@@ -413,17 +354,33 @@ class DebugWindow(tk.Toplevel):
         for widget in self.details_frame.winfo_children(): widget.destroy()
         self.attribute_widgets = {}
         
-        attrs = sorted([attr for attr in vars(self.selected_entity) if attr not in ['source_data', 'manager']])
+        all_attr_keys = set(vars(self.selected_entity).keys()) | {'memories', 'quotes'}
+        attrs = sorted([attr for attr in all_attr_keys if attr not in ['source_data', 'manager']])
+
         self.details_frame.grid_columnconfigure(1, weight=1)
-
         self._bind_scroll_recursive(self.details_frame, self.main_canvas)
-
+        
         for i, attr_name in enumerate(attrs):
-            value = getattr(self.selected_entity, attr_name)
+            value = getattr(self.selected_entity, attr_name, [])
             tk.Label(self.details_frame, text=attr_name).grid(row=i, column=0, sticky="nw", padx=5, pady=5)
             
-            if attr_name == 'inventory' and isinstance(value, list):
-                self._create_inventory_ui(self.details_frame, i, value)
+            # Condition to identify any list of dictionary-like objects
+            is_structured_list = isinstance(value, list) and value and isinstance(value[0], dict)
+            # Also treat known empty lists as structured
+            if not is_structured_list and attr_name in ['inventory', 'spells', 'abilities', 'actions'] and isinstance(value, list):
+                 is_structured_list = True
+
+            if is_structured_list:
+                self._create_structured_list_ui(self.details_frame, i, value, attr_name)
+
+            elif attr_name in ['memories', 'quotes']:
+                widget = tk.Text(self.details_frame, height=5, wrap=tk.WORD)
+                if isinstance(value, list):
+                    widget.insert('1.0', '\n'.join(map(str, value)))
+                else:
+                    widget.insert('1.0', str(value))
+                widget.grid(row=i, column=1, sticky="ew", padx=2, pady=2)
+                self.attribute_widgets[attr_name] = widget
             
             elif attr_name == 'attitudes':
                 normalized_attitudes = value if isinstance(value, dict) else {k: v for d in value for k, v in d.items()}
@@ -438,9 +395,6 @@ class DebugWindow(tk.Toplevel):
                 add_button.pack(fill="x", expand=True, side="bottom")
                 self.attribute_widgets[attr_name] = sub_widgets
             
-            elif isinstance(value, list) and value and isinstance(value[0], dict):
-                self._create_structured_list_ui(self.details_frame, i, value, attr_name)
-
             elif isinstance(value, list):
                  self._create_simple_list_ui(self.details_frame, i, value, attr_name)
                  
@@ -481,7 +435,21 @@ class DebugWindow(tk.Toplevel):
         for item_dict in value:
             self._create_structured_list_row(scrollable_frame, item_dict, item_widget_list, attr_name)
         self._bind_scroll_recursive(scrollable_frame, list_canvas)
+        
+        # Use existing item as a template, or create a default one if the list is empty
         template = value[0] if value else {}
+        if not template:
+            if attr_name == 'inventory':
+                template = {'item': 'new_item', 'quantity': 1, 'equipped': False}
+            elif attr_name == 'spells':
+                template = {'name': 'new_spell', 'level': 1, 'prepared': False}
+            elif attr_name == 'abilities':
+                template = {'name': 'new_ability', 'effect': 'description'}
+            elif attr_name == 'actions':
+                 template = {"skill": "strength", "difficulty": 10, "pass": "success", "fail": "nothing"}
+            else: # A generic fallback for other unknown list types
+                template = {'name': 'new_item', 'description': 'a new description'}
+
         add_button = Button(main_container, text="+ Add New Item", command=lambda sf=scrollable_frame, iwl=item_widget_list, t=template, an=attr_name: self._add_structured_item(sf, iwl, t, an))
         add_button.grid(row=1, column=0, columnspan=2, sticky="ew")
 
@@ -519,18 +487,11 @@ class DebugWindow(tk.Toplevel):
         for attr, collection in self.attribute_widgets.items():
             orig_val = getattr(self.selected_entity, attr, None)
             try:
-                if attr == 'inventory':
-                    new_inventory = []
-                    for widget_set in collection:
-                        item_name = widget_set['item_entry'].get()
-                        try:
-                            quantity = int(widget_set['qty_entry'].get())
-                        except ValueError:
-                            quantity = 1
-                        if item_name:
-                            new_inventory.append({'item': item_name, 'quantity': quantity})
-                    setattr(self.selected_entity, attr, new_inventory)
-                
+                if attr in ['memories', 'quotes']:
+                    text_content = collection.get('1.0', tk.END).strip()
+                    new_list = [line for line in text_content.split('\n') if line.strip()]
+                    setattr(self.selected_entity, attr, new_list)
+
                 elif attr == 'attitudes':
                     new_dict = {}
                     if isinstance(collection, list):
@@ -541,6 +502,7 @@ class DebugWindow(tk.Toplevel):
 
                 elif isinstance(collection, list) and isinstance(orig_val, list):
                     if collection and isinstance(collection[0], dict):
+                        # This now handles all structured lists, including inventory
                         new_list_of_dicts = []
                         for item_widget_dict in collection:
                             new_item_dict = {}
@@ -548,18 +510,19 @@ class DebugWindow(tk.Toplevel):
                                 val = widget.get() if isinstance(widget, (tk.BooleanVar, Entry)) else widget
                                 new_item_dict[key] = val
                             
-                            if orig_val:
-                                template_dict = orig_val[0] if orig_val else {}
-                                for key in new_item_dict:
-                                    if key in template_dict:
-                                        orig_type = type(template_dict.get(key, ''))
-                                        try:
-                                            current_val = new_item_dict[key]
-                                            if orig_type is bool and not isinstance(current_val, bool):
-                                                new_item_dict[key] = str(current_val).lower() in ('true', '1', 'yes')
-                                            elif type(current_val) is not orig_type:
-                                                new_item_dict[key] = orig_type(current_val)
-                                        except (ValueError, TypeError): pass
+                            # Attempt to cast saved values back to their original types
+                            template_dict = (orig_val[0] if orig_val else {}) or new_item_dict
+                            for key in new_item_dict:
+                                if key in template_dict:
+                                    # Use string as a fallback type
+                                    orig_type = type(template_dict.get(key, ''))
+                                    try:
+                                        current_val = new_item_dict[key]
+                                        if orig_type is bool and not isinstance(current_val, bool):
+                                            new_item_dict[key] = str(current_val).lower() in ('true', '1', 'yes')
+                                        elif type(current_val) is not orig_type:
+                                            new_item_dict[key] = orig_type(current_val)
+                                    except (ValueError, TypeError): pass
                             new_list_of_dicts.append(new_item_dict)
                         setattr(self.selected_entity, attr, new_list_of_dicts)
                     else:
@@ -737,7 +700,6 @@ class DebugWindow(tk.Toplevel):
             for door_id, door_data in env.doors.items():
                 self._add_node_to_tree(doors_root, env.doors, door_data, key_name=f"{door_id}: {door_data.get('name', '')}")
 
-    # --- RESTORED METHOD ---
     def show_env_details(self, event=None):
         """Displays editable widgets for the selected environment item."""
         selection = self.env_tree.selection()

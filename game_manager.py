@@ -95,11 +95,11 @@ class GameManager:
                 output_log.append(npc_turn_result["narrative"])
             if npc_turn_result.get("mechanical"):
                 output_log.append(f"Mechanics: {npc_turn_result['mechanical']}")
-                final_narration = narration(
-                    current_character, self.environment, self.players, self.actors,
-                    npc_turn_result["mechanical"], self.game_history, self.llm_config, DEBUG
-                )
-                output_log.append(final_narration)
+                #final_narration = narration(
+                #    current_character, self.environment, self.players, self.actors,
+                #    npc_turn_result["mechanical"], self.game_history, self.llm_config, DEBUG
+                #)
+                #output_log.append(final_narration)
             self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
         return output_log
 
@@ -137,11 +137,11 @@ class GameManager:
         )
         if mechanical_result:
             output_log.append(f"Mechanics: {mechanical_result}")
-            narrative_text = narration(
-                player_character, self.environment, self.players, self.actors,
-                mechanical_result, self.game_history, self.llm_config, DEBUG
-            )
-            output_log.append(narrative_text)
+            #narrative_text = narration(
+            #    player_character, self.environment, self.players, self.actors,
+            #    mechanical_result, self.game_history, self.llm_config, DEBUG
+            #)
+            #output_log.append(narrative_text)
         else:
             self.game_history.add_dialogue(player_character.name, command)
             output_log.append(f"{player_character.name}: \"{command}\"")
