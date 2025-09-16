@@ -99,7 +99,7 @@ class GameManager:
                 #    current_character, self.environment, self.players, self.actors,
                 #    npc_turn_result["mechanical"], self.game_history, self.llm_config, DEBUG
                 #)
-                #output_log.append(final_narration)
+                output_log.append(final_narration)
             self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
         return output_log
 
