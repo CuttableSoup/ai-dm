@@ -339,8 +339,12 @@ class DebugWindow(tk.Toplevel):
         self.entity_listbox.delete(0, tk.END)
         self.displayed_entities.clear()
         if not self.game_manager.turn_order: return
+
+        # --- UPDATED DATA ACCESS ---
+        game_state = self.game_manager.game_state
         current_actor = self.game_manager.turn_order[self.game_manager.current_turn_index]
-        all_entities = self.game_manager.environment.players + self.game_manager.environment.actors + self.game_manager.environment.objects
+        all_entities = game_state.environment.players + game_state.environment.actors + game_state.environment.objects
+        
         for entity in all_entities:
             if hasattr(entity, 'location') and entity.location == current_actor.location:
                 self.displayed_entities.append(entity)
@@ -584,7 +588,8 @@ class DebugWindow(tk.Toplevel):
         if not self.game_manager.turn_order: return
         self.history_text.config(state='normal')
         self.history_text.delete('1.0', tk.END)
-        history_str = self.game_manager.game_history.get_history_string()
+        # --- UPDATED DATA ACCESS ---
+        history_str = self.game_manager.game_state.game_history.get_history_string()
         self.history_text.insert('1.0', history_str)
         self.history_text.config(state='disabled')
         
@@ -595,7 +600,8 @@ class DebugWindow(tk.Toplevel):
 
     def refresh_party_tab(self):
         if not self.game_manager.turn_order: return
-        party = self.game_manager.party
+        # --- UPDATED DATA ACCESS ---
+        party = self.game_manager.game_state.party
         party_status = f"Party Name: {party.name}\n\n"
         party_status += "--- Members ---\n"
         party_status += party.get_party_status()
@@ -687,7 +693,8 @@ class DebugWindow(tk.Toplevel):
         self.selected_env_item = None
         self._update_add_menu()
 
-        env = self.game_manager.environment
+        # --- UPDATED DATA ACCESS ---
+        env = self.game_manager.game_state.environment
         if hasattr(env, 'rooms') and isinstance(env.rooms, dict):
             rooms_root = self.env_tree.insert("", "end", text="Rooms", open=True)
             self.tree_item_map[rooms_root] = {'data': env.rooms, 'parent': env, 'key': 'rooms'}
@@ -836,14 +843,16 @@ class DebugWindow(tk.Toplevel):
             self.add_menu.add_command(label="(Nothing to add here)", state="disabled")
             
     def _add_new_room(self):
-        rooms, i = self.game_manager.environment.rooms, 1
+        # --- UPDATED DATA ACCESS ---
+        rooms, i = self.game_manager.game_state.environment.rooms, 1
         while f"new_room_{i}" in rooms: i += 1
         new_id = f"new_room_{i}"
         rooms[new_id] = {"name": "New Room", "room_id": new_id, "zones": []}
         self.refresh_environment_tab()
 
     def _add_new_door(self):
-        doors, i = self.game_manager.environment.doors, 1
+        # --- UPDATED DATA ACCESS ---
+        doors, i = self.game_manager.game_state.environment.doors, 1
         while f"new_door_{i}" in doors: i += 1
         new_id = f"new_door_{i}"
         doors[new_id] = {"name": "New Door", "door_id": new_id, "status": "closed", "actions": []}
@@ -868,8 +877,23 @@ class DebugWindow(tk.Toplevel):
 if __name__ == "__main__":
     main_window = tk.Tk()
     class DummyGameManager:
-        def __init__(self): self.turn_order = []
-        def start_game(self): self.turn_order = ["player"]; return "Dummy game started."
+        def __init__(self): 
+            self.turn_order = []
+            # The dummy needs a dummy game_state for the debug panel to work
+            class DummyState:
+                class DummyEnv:
+                    rooms = {}
+                    doors = {}
+                party = None
+                game_history = None
+                environment = DummyEnv()
+            self.game_state = DummyState()
+
+        def start_game(self): 
+            self.turn_order = ["player"]
+            return "Dummy game started."
         def process_player_command(self, cmd): return f"Processed: {cmd}"
+        def get_initiative_order(self): return "1. player"
+
     app = GameGUI(main_window, DummyGameManager())
     main_window.mainloop()

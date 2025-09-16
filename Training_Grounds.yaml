@@ -1,0 +1,18 @@
+scenario_name: The Training Grounds
+players:
+  - sheet: d6_warrior.yaml
+    location:
+      room_id: room_1
+      zone: 1
+environment:
+  rooms:
+    - name: The Arena
+      room_id: room_1
+      zones:
+      - zone: 1
+        description: A well lit arena.
+        objects:
+          - name: Dummy
+            description: A wooden dummy
+            hp: 200
+            dr: 5

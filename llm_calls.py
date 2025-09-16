@@ -1,74 +1,42 @@
 import requests
 import json
-from actions import execute_skill_check, manage_item, manage_party_member, move_party, cast_spell
 import textwrap
 import copy
+# --- UPDATED IMPORTS ---
+# We no longer import the specific actions, just the new state/handler classes.
+from game_state import GameState
+from action_handler import ActionHandler
 
-def execute_function_call(actor, function_name, arguments, environment, players, actors, game_history, party, llm_config):
+# ---------------------------------------------------------------------------
+# The `execute_function_call` helper function has been REMOVED from this file.
+# Its logic is now handled by the new `ActionHandler` class for better
+# separation of concerns.
+# ---------------------------------------------------------------------------
+
+def player_action(input_command: str, actor, game_state: GameState, action_handler: ActionHandler, llm_config: dict, debug=False):
     """
-    A helper to execute the function call from the LLM's response.
-    This function is now passed the necessary game state components.
+    Sends the current game state and player command to the AI model.
+    If the AI chooses an action, this function uses the ActionHandler to execute it.
     """
-    if function_name == "execute_skill_check":
-        mechanical_result = execute_skill_check(actor, environment=environment, players=players, actors=actors, **arguments)
-        game_history.add_action(actor.name, f"attempted to use {arguments.get('skill', 'a skill')} on {arguments.get('target', 'a target')}.")
-        return mechanical_result
+    # --- CONTEXT GATHERING (now using the GameState object) ---
+    current_room, current_zone_data = game_state.environment.get_current_room_data(actor.location)
     
-    elif function_name == "manage_item":
-        mechanical_result = manage_item(actor=actor, environment=environment, party=party, players=players, actors=actors, **arguments)
-        action_desc = arguments.get('action', 'manage')
-        item_desc = arguments.get('item_name', 'an item')
-        target_desc = f" on {arguments.get('target_name', 'a target')}" if 'target_name' in arguments else ""
-        game_history.add_action(actor.name, f"attempted to {action_desc} {item_desc}{target_desc}.")
-        return mechanical_result
-
-    elif function_name == "manage_party_member":
-        mechanical_result = manage_party_member(actor=actor, party=party, actors=actors, **arguments)
-        action_desc = arguments.get('action', 'manage')
-        member_desc = arguments.get('member_name', 'a character')
-        game_history.add_action(actor.name, f"attempted to {action_desc} {member_desc} from the party.")
-        return mechanical_result
-
-    elif function_name == "move_party":
-        mechanical_result = move_party(actor=actor, environment=environment, party=party, **arguments)
-        dest_desc = arguments.get('destination_zone', 'a new area')
-        game_history.add_action(actor.name, f"attempted to move the party to {dest_desc}.")
-        return mechanical_result
-    
-    elif function_name == "cast_spell":
-        mechanical_result = cast_spell(actor=actor, environment=environment, players=players, actors=actors, party=party, game_history=game_history, llm_config=llm_config, **arguments)
-        action_desc = arguments.get('spell_name', 'a spell')
-        target_desc = arguments.get('target_name', 'a target')
-        game_history.add_action(actor.name, f"attempted to cast {action_desc} on {target_desc}.")
-        return mechanical_result
-
-    mechanical_result = f"Error: The AI tried to call an unknown function '{function_name}'."
-    game_history.add_action(actor.name, mechanical_result)
-    return mechanical_result
-
-def player_action(input_command, actor, game_history, environment, players, actors, party, llm_config, debug=False):
-    """
-    Sends the current game state and player command to the AI model,
-    which then chooses an action (a function) to execute.
-    """
-    current_room, current_zone_data = environment.get_current_room_data(actor.location)
-    
-    # Get objects from the new Environment method
-    objects_in_zone = environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
+    objects_in_zone = game_state.environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
     object_names = [obj.name for obj in objects_in_zone]
     
-    actors_in_room = [a.name for a in players + actors if a.location == actor.location and a.name != actor.name]
+    all_actors = game_state.players + game_state.actors
+    actors_in_room = [a.name for a in all_actors if a.location == actor.location and a.name != actor.name]
 
     doors_in_room = []
     if current_zone_data and 'exits' in current_zone_data:
         for exit_data in current_zone_data['exits']:
             door_ref = exit_data.get('door_ref')
             if door_ref:
-                door = environment.get_door_by_id(door_ref)
+                door = game_state.environment.get_door_by_id(door_ref)
                 if door:
                     doors_in_room.append(door['name'])
     
-    current_trap = environment.get_trap_in_room(actor.location['room_id'], actor.location['zone'])
+    current_trap = game_state.environment.get_trap_in_room(actor.location['room_id'], actor.location['zone'])
     
     prompt_template = textwrap.dedent("""
     You are an AI assistant for a text-based game. Your task is to determine if a described action requires a mechanical function call.
@@ -101,7 +69,7 @@ def player_action(input_command, actor, game_history, environment, players, acto
         objects_present=object_names,
         doors_present=doors_in_room,
         traps_present=[current_trap['name']] if current_trap else [],
-        game_history=game_history.get_history_string()
+        game_history=game_state.game_history.get_history_string()
     )
 
     payload = {
@@ -131,34 +99,38 @@ def player_action(input_command, actor, game_history, environment, players, acto
             
         message = response.get("choices", [{}])[0].get("message", {})
         if not message.get("tool_calls"):
-            game_history.add_dialogue(actor.name, input_command)
+            # No mechanical action was chosen.
             return None
             
         tool_call = message['tool_calls'][0]['function']
         function_name = tool_call['name']
         arguments = json.loads(tool_call['arguments'])
         
-        return execute_function_call(actor, function_name, arguments, environment, players, actors, game_history, party, llm_config)
+        # --- SIMPLIFIED EXECUTION ---
+        # Instead of a giant if/elif chain, we delegate to the ActionHandler.
+        return action_handler.execute_action(actor, function_name, arguments)
 
     except Exception as e:
         mechanical_result = f"Error communicating with AI: {e}"
-        game_history.add_action(actor.name, mechanical_result)
+        game_state.game_history.add_action(actor.name, mechanical_result)
         return mechanical_result
 
-def narration(actor, environment, players, actors, mechanical_summary, game_history, llm_config, debug=False):
+def narration(actor, game_state: GameState, mechanical_summary: str, llm_config: dict, debug=False):
     """
     Generates a narrative summary of the events that just occurred.
     """
-    current_room, current_zone_data = environment.get_current_room_data(actor.location)
+    # --- CONTEXT GATHERING (now using the GameState object) ---
+    current_room, current_zone_data = game_state.environment.get_current_room_data(actor.location)
 
-    # Get objects from the new Environment method
-    objects_in_zone = environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
+    objects_in_zone = game_state.environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
     object_names = [obj.name for obj in objects_in_zone]
-
-    actors_in_room = [a.name for a in players + actors if a.location == actor.location]
+    
+    all_actors = game_state.players + game_state.actors
+    actors_in_room = [a.name for a in all_actors if a.location == actor.location]
 
     prompt_template = textwrap.dedent("""
     You are the narrator of a grounded, text-based RPG. Your job is to describe the outcome of the player's action in a vivid and engaging way, like a good Dungeon Master.
+    
     **CONTEXT**
     - Current Room: {room_name} - {zone_description}
     - Actors Present in this location: {actors_present}
@@ -181,7 +153,7 @@ def narration(actor, environment, players, actors, mechanical_summary, game_hist
         objects_present=", ".join(object_names) if object_names else "none",
         mechanical_summary=mechanical_summary,
         player_name=actor.name,
-        game_history=game_history.get_history_string(),
+        game_history=game_state.game_history.get_history_string(),
     )
     
     payload = {"model": llm_config['model'], "messages": [{"role": "user", "content": prompt}]}
@@ -208,29 +180,23 @@ def narration(actor, environment, players, actors, mechanical_summary, game_hist
     except Exception as e:
         return f"LLM Error: Could not get narration. {e}"
 
-def npc_action(actor, game_history, environment, players, actors, party, llm_config, debug=False):
+def npc_action(actor, game_state: GameState, action_handler: ActionHandler, llm_config: dict, debug=False):
     """
     Generates NPC dialogue and/or a mechanical action, returning both for processing.
     """
-    # ... (the entire top part of the function with the prompt setup is the same)
-    current_room, current_zone_data = environment.get_current_room_data(actor.location)
-    objects_in_zone = environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
+    # --- CONTEXT GATHERING (now using the GameState object) ---
+    current_room, current_zone_data = game_state.environment.get_current_room_data(actor.location)
+    objects_in_zone = game_state.environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
     object_names = [obj.name for obj in objects_in_zone]
-    actors_in_room = [a.name for a in players + actors if a.location == actor.location and a.name != actor.name]
-    doors_in_room = []
-    if current_zone_data and 'exits' in current_zone_data:
-        for exit_data in current_zone_data['exits']:
-            door_ref = exit_data.get('door_ref')
-            if door_ref:
-                door = environment.get_door_by_id(door_ref)
-                if door:
-                    doors_in_room.append(door['name'])
-    current_trap = environment.get_trap_in_room(actor.location['room_id'], actor.location['zone'])
+    all_actors = game_state.players + game_state.actors
+    actors_in_room = [a.name for a in all_actors if a.location == actor.location and a.name != actor.name]
+    
     attitudes_list = actor.source_data.get('attitudes', [])
     attitudes_str = "none"
     if attitudes_list:
         formatted_attitudes = [f"{k}: {v}" for d in attitudes_list for k, v in d.items()]
         attitudes_str = ", ".join(formatted_attitudes)
+        
     character_qualities = actor.source_data.get('qualities', {})
     gender = character_qualities.get('gender', 'unknown')
     race = character_qualities.get('race', 'unknown')
@@ -238,6 +204,7 @@ def npc_action(actor, game_history, environment, players, actors, party, llm_con
     eyes = character_qualities.get('eyes', 'unknown')
     hair = character_qualities.get('hair', 'unknown')
     skin = character_qualities.get('skin', 'unknown')
+    
     prompt_template = textwrap.dedent("""
     You are an AI Game Master controlling an NPC named {actor_name}. Your task is to determine the NPC's next action, generate their dialogue or a description of the action IN THIRD PERSON, AND select the appropriate function to call if a mechanical action is taken.
 
@@ -275,7 +242,7 @@ def npc_action(actor, game_history, environment, players, actors, party, llm_con
         objects_present=", ".join(object_names) if object_names else "none",
         actor_skills=list(actor.skills.keys()),
         player_name=actor.name,
-        game_history=game_history.get_history_string(),
+        game_history=game_state.game_history.get_history_string(),
         statuses=", ".join(actor.source_data.get('statuses', [])) or "none",
         memories=", ".join(actor.source_data.get('memories', [])) or "none",
         attitudes=attitudes_str,
@@ -315,16 +282,16 @@ def npc_action(actor, game_history, environment, players, actors, party, llm_con
         mechanical_result = None
         
         if narrative_output:
-            game_history.add_dialogue(actor.name, narrative_output)
+            game_state.game_history.add_dialogue(actor.name, narrative_output)
 
         if message.get("tool_calls"):
             tool_call = message['tool_calls'][0]['function']
-            mechanical_result = execute_function_call(actor, tool_call['name'], json.loads(tool_call['arguments']), environment, players, actors, game_history, party, llm_config)
+            arguments = json.loads(tool_call['arguments'])
+            # Use the action handler to execute the NPC's chosen action
+            mechanical_result = action_handler.execute_action(actor, tool_call['name'], arguments)
         
-        # Return both the narrative and the mechanical result
         return {"narrative": narrative_output, "mechanical": mechanical_result}
 
     except Exception as e:
         error_result = f"Error communicating with AI: {e}"
-        # Return the error in the same format
         return {"narrative": f"{actor.name} seems confused and does nothing.", "mechanical": error_result}

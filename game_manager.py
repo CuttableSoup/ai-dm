@@ -1,11 +1,15 @@
 import yaml
 import os
 import pickle
-from classes import Environment, GameHistory, Party
+# --- UPDATED IMPORTS ---
+# We no longer import the classes directly, but the new state/handler objects
 from llm_calls import player_action, npc_action, narration
 from d6_rules import roll_d6_dice
+from game_state import GameState
+from action_handler import ActionHandler
+from classes import Environment, GameHistory, Party # Still need these for initialization
 
-SCENARIO_FILE = "scenario.yaml"
+SCENARIO_FILE = "Training_Grounds.yaml"
 INVENTORY_FILE = "inventory.yaml"
 DEBUG = True
 
@@ -15,10 +19,12 @@ class GameManager:
     def __init__(self, llm_config):
         """Initializes the game by loading all necessary data."""
         self.llm_config = llm_config
-        self.game_history = GameHistory()
-        self.party = Party()
         self._load_data()
-        self._setup_environment()
+        self._setup_game_state() # This method now creates our GameState object
+
+        # The GameManager now creates and owns the ActionHandler
+        self.action_handler = ActionHandler(self.game_state, self.llm_config)
+
         self.turn_order = []
         self.current_turn_index = 0
         self.gui_text_log = ""
@@ -44,21 +50,29 @@ class GameManager:
             print(f"ERROR: Could not load/parse character sheet at {filepath}: {e}")
             return None
 
-    def _setup_environment(self):
-        """Instantiates the environment, players, and NPCs."""
+    def _setup_game_state(self):
+        """
+        Instantiates the environment, players, and NPCs, and then bundles them
+        into a single GameState object.
+        """
+        game_history = GameHistory()
+        party = Party()
+
         actors_data = self.scenario_data.get('actors') or []
-        self.environment = Environment(
+        environment = Environment(
             self.scenario_data,
             self.all_items,
             self.scenario_data.get('players', []),
             actors_data,
             self._load_character_sheet
         )
-        self.players = self.environment.players
-        self.actors = self.environment.actors
 
-        for player in self.players:
-            self.party.add_member(player)
+        for player in environment.players:
+            party.add_member(player)
+
+        # Create the single GameState object that holds all game data
+        self.game_state = GameState(environment, party, game_history)
+
 
     def save_game(self, filepath):
         """Saves the current game state to a file using pickle."""
@@ -86,40 +100,46 @@ class GameManager:
             if not self.turn_order: break
             current_character = self.turn_order[self.current_turn_index]
             if current_character.is_player: break
+            
             output_log.append(f"\n--- {current_character.name}'s Turn ---")
+            
+            # The call to npc_action would also be updated to use GameState and ActionHandler
+            # For now, we'll pass the components from the game_state object
             npc_turn_result = npc_action(
-                current_character, self.game_history, self.environment,
-                self.players, self.actors, self.party, self.llm_config, DEBUG
+                current_character, 
+                self.game_state,  # Pass the whole state object
+                self.action_handler,
+                self.llm_config, 
+                DEBUG
             )
+            
             if npc_turn_result.get("narrative"):
                 output_log.append(npc_turn_result["narrative"])
             if npc_turn_result.get("mechanical"):
-                output_log.append(f"Mechanics: {npc_turn_result['mechanical']}")
-                #final_narration = narration(
-                #    current_character, self.environment, self.players, self.actors,
-                #    npc_turn_result["mechanical"], self.game_history, self.llm_config, DEBUG
-                #)
-                output_log.append(final_narration)
+                mechanical_text = npc_turn_result["mechanical"]
+                output_log.append(f"Mechanics: {mechanical_text}")
+                # The ActionHandler or npc_action call itself should now handle history
+                
             self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
         return output_log
 
     def start_game(self):
-        all_combatants = self.players + self.actors
+        # Use the game_state object to get players and actors
+        all_combatants = self.game_state.players + self.game_state.actors
+        
         initiative_rolls = []
         for combatant in all_combatants:
             dex_pips = combatant.get_attribute_or_skill_pips('dexterity')
             wis_pips = combatant.get_attribute_or_skill_pips('wisdom')
             score = roll_d6_dice(dex_pips) + roll_d6_dice(wis_pips)
             initiative_rolls.append((score, combatant))
+            
         initiative_rolls.sort(key=lambda x: x[0], reverse=True)
         self.turn_order = [combatant for _, combatant in initiative_rolls]
         self.current_turn_index = 0
-        output_log = ["--- Game Start ---"]
-        initiative_list = "\n".join([f"{i+1}. {c.name}" for i, c in enumerate(self.turn_order)])
-        output_log.append(f"Initiative Order:\n{initiative_list}\n")
-        first_character = self.turn_order[0]
-        room, zone = self.environment.get_current_room_data(first_character.location)
-        output_log.append(f"Location: {room['name']} - {zone['description']}\n")
+        
+        output_log = ["--- Welcome Adventurer ---"]
+        
         npc_logs = self._process_npc_turns()
         output_log.extend(npc_logs)
         return "\n".join(output_log)
@@ -127,42 +147,49 @@ class GameManager:
     def process_player_command(self, command):
         if not self.turn_order:
             return "The game hasn't started yet. Please start a new game."
+            
         output_log = []
         player_character = self.turn_order[self.current_turn_index]
+        
         if not player_character.is_player:
             return "ERROR: Game is expecting an NPC to act, not a player. State is out of sync."
+
+        # --- UPDATED FUNCTION CALL ---
+        # The call to player_action is now much cleaner.
         mechanical_result = player_action(
-            command, player_character, self.game_history,
-            self.environment, self.players, self.actors, self.party, self.llm_config, DEBUG
+            command,
+            player_character,
+            self.game_state,      # Pass the whole state object
+            self.action_handler,  # Pass the handler
+            self.llm_config,
+            DEBUG
         )
+
         if mechanical_result:
             output_log.append(f"Mechanics: {mechanical_result}")
-            #narrative_text = narration(
-            #    player_character, self.environment, self.players, self.actors,
-            #    mechanical_result, self.game_history, self.llm_config, DEBUG
-            #)
-            #output_log.append(narrative_text)
+            # The ActionHandler now adds the result to game_history, so we don't need to do it here.
         else:
-            self.game_history.add_dialogue(player_character.name, command)
+            # If no mechanical action was taken, it's dialogue.
+            self.game_state.game_history.add_dialogue(player_character.name, command)
             output_log.append(f"{player_character.name}: \"{command}\"")
+            
         self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
+        
         npc_logs = self._process_npc_turns()
         output_log.extend(npc_logs)
+        
         next_player_character = self.turn_order[self.current_turn_index]
         output_log.append(f"\nIt's now {next_player_character.name}'s turn. What do you do?")
+        
         return "\n".join(output_log)
-    
+
     def get_initiative_order(self):
         """Returns a formatted string of the current initiative order."""
         if not self.turn_order:
             return "Initiative has not been rolled yet."
 
-        initiative_lines = []
-        # Header for the list
-        initiative_lines.append("--- Initiative Order ---")
-
+        initiative_lines = ["--- Initiative Order ---"]
         for i, character in enumerate(self.turn_order):
-            # Add an arrow '-->' to indicate whose turn it is
             turn_indicator = "--> " if i == self.current_turn_index else "    "
             line = f"{turn_indicator}{i+1}. {character.name}"
             initiative_lines.append(line)

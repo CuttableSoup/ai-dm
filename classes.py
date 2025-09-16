@@ -132,28 +132,16 @@ class Actor:
 
         return 0
 
-    def take_damage(self, damage):
-        self.cur_hp -= damage
-        if self.cur_hp < 0:
-            self.cur_hp = 0
-        return f"{self.name} took {damage} damage and now has {self.cur_hp} HP."
-
-    def heal_damage(self, healing):
-        self.cur_hp += healing
-        if self.cur_hp > self.max_hp:
-            self.cur_hp = self.max_hp
-        return f"{self.name} healed {healing} HP and now has {self.cur_hp} HP."
-
 class GameHistory:
     """Records the past few actions and dialogues in the game."""
     def __init__(self, max_entries=5):
         self.history = deque(maxlen=max_entries)
 
     def add_action(self, actor_name, action_description):
-        self.history.append(f"ACTION: {actor_name} - {action_description}")
+        self.history.append(f"{actor_name} - {action_description}")
 
     def add_dialogue(self, actor_name, dialogue_text):
-        self.history.append(f"DIALOGUE: {actor_name}: \"{dialogue_text}\"")
+        self.history.append(f"{actor_name}: \"{dialogue_text}\"")
 
     def get_history_string(self):
         if not self.history:
