@@ -227,20 +227,11 @@ class DebugWindow(tk.Toplevel):
 
     def _create_structured_list_row(self, parent_frame, item_dict, widget_list, attr_name):
         """Creates the UI for a single structured list item and adds it to the list."""
-
-        # --- FIX STARTS HERE ---
-        # If the item from the list is a simple string instead of a dictionary,
-        # we convert it into a dictionary on the fly. This handles cases where
-        # a character sheet might have a simplified list like `spells: ["Fireball"]`.
         if isinstance(item_dict, str):
-            # Determine the primary key based on the attribute's name
-            primary_key = 'name'  # A sensible default
+            primary_key = 'name'
             if attr_name == 'inventory':
                 primary_key = 'item'
-            
-            # Convert the string into a dictionary
             item_dict = {primary_key: item_dict}
-        # --- FIX ENDS HERE ---
 
         item_widgets = {}
         row_frame = Frame(parent_frame, bd=1, relief=tk.RIDGE)
@@ -253,7 +244,6 @@ class DebugWindow(tk.Toplevel):
 
         equipped_keys = ['equipped', 'prepared']
         
-        # Now that we've ensured item_dict is a dictionary, this check is safer.
         has_equipped_key = any(key in item_dict for key in equipped_keys)
         if not has_equipped_key:
             key_to_add = 'prepared' if attr_name == 'spells' else 'equipped'
@@ -619,7 +609,6 @@ class DebugWindow(tk.Toplevel):
         self.party_text.insert('1.0', party_status)
         self.party_text.config(state='disabled')
 
-    # --- NEW: LLM LOG TAB METHODS START HERE ---
     def _create_llm_log_tab(self):
         """Creates the widgets for the LLM Log tab."""
         self.llm_log_text = scrolledtext.ScrolledText(self.tab_llm_log, wrap=tk.WORD, state='disabled', font=("Courier", 10))
@@ -647,9 +636,8 @@ class DebugWindow(tk.Toplevel):
 
         self.llm_log_text.insert('1.0', full_log_text)
         self.llm_log_text.config(state='disabled')
-        self.llm_log_text.see(tk.END) # Auto-scroll to the bottom
+        self.llm_log_text.see(tk.END)
 
-    # --- ENVIRONMENT TAB METHODS START HERE ---
     def _get_descriptive_name(self, item, index):
         item_node_name = f"Item {index+1}"
         if isinstance(item, dict):
@@ -925,7 +913,7 @@ if __name__ == "__main__":
                 environment = DummyEnv()
                 llm_log = [
                     {"type": "Dummy Call", "prompt": "This is a test prompt.", "response": {"result": "ok"}}
-                ] # Add dummy log for testing
+                ]
             self.game_state = DummyState()
 
         def start_game(self): 

@@ -1,12 +1,11 @@
 from d6_rules import roll_d6_check, COMBAT_SKILLS, OPPOSED_SKILLS, roll_d6_dice
 from llm_spell_calls import resolve_spell_effect
-from game_state import GameState # Import the new GameState class
+from classes import GameState
 
 def get_equipped_weapon(actor, skill_name, game_state: GameState):
     """Finds the equipped weapon for a given combat skill."""
     for item_in_inventory in getattr(actor, 'inventory', []):
         if item_in_inventory.get('equipped'):
-            # Use the environment from the game_state object
             item_details = game_state.environment.get_item_details(item_in_inventory['item'])
             if item_details and item_details.get('skill', '').lower() == skill_name.lower():
                 return item_details
@@ -23,7 +22,6 @@ def execute_skill_check(actor, skill: str, target: str, game_state: GameState):
     skill_lower = skill.lower()
     target_lower = target.lower()
 
-    # Access environment and actors through the single game_state object
     target_object = game_state.environment.get_object_in_room(actor.location['room_id'], target_lower)
     target_door = next((d for d in game_state.environment.doors.values() if d['name'].lower() == target_lower), None)
     target_trap = game_state.environment.get_trap_in_room(actor.location['room_id'], actor.location['zone'])
@@ -106,7 +104,6 @@ def execute_skill_check(actor, skill: str, target: str, game_state: GameState):
             else:
                 return f"{target_actor.name} resists {actor.name}'s attempt at {skill}."
 
-        # --- ALL ORIGINAL PLACEHOLDER SKILLS ARE PRESERVED ---
         case "athletics":
             return
         case "throwing":
@@ -274,7 +271,7 @@ def manage_party_member(actor, action: str, member_name: str, game_state: GameSt
             if member_to_manage in party.members:
                 return f"{member_name} is already in the party."
             party.add_member(member_to_manage)
-            return f"{member_name} has joined the party."
+            return
         case 'remove':
             if member_to_manage not in party.members:
                 return f"{member_name} is not in the party."
@@ -316,12 +313,10 @@ def move_party(actor, destination_zone: str, game_state: GameState):
 
 def cast_spell(actor, spell_name: str, target_name: str, game_state: GameState, llm_config: dict):
     """Handles the entire process of casting a spell: skill check, then effect resolution."""
-    # Find the spell details from the environment in the game_state
     spell_details = game_state.environment.get_spell_details(spell_name)
     if not spell_details:
         return f"{actor.name} does not know the spell '{spell_name}'."
 
-    # Find the target using the helper method on game_state
     target = game_state.find_actor_by_name(target_name)
     if not target:
         return f"Cannot find a target named '{target_name}'."
@@ -332,14 +327,12 @@ def cast_spell(actor, spell_name: str, target_name: str, game_state: GameState, 
     if caster_skill_pips < difficulty:
         return f"{actor.name} attempts to cast {spell_name}, but the magic fizzles and dissipates with a faint pop."
 
-    # Use the game_history object from the game_state
     game_state.game_history.add_action(actor.name, f"successfully casts {spell_name} on {target.name}.")
     
     mechanical_result = resolve_spell_effect(
         caster=actor,
         spell=spell_details,
         target=target,
-        # Unpack the necessary components from game_state for the resolver
         party=game_state.party,
         players=game_state.players,
         actors=game_state.actors,

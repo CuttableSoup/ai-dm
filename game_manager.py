@@ -1,13 +1,10 @@
 import yaml
-import os
 import pickle
-# --- UPDATED IMPORTS ---
-# We no longer import the classes directly, but the new state/handler objects
 from llm_calls import player_action, npc_action, narration
 from d6_rules import roll_d6_dice
-from game_state import GameState
-from action_handler import ActionHandler
-from classes import Environment, GameHistory, Party # Still need these for initialization
+from classes import GameState
+from classes import ActionHandler
+from classes import Environment, GameHistory, Party
 
 SCENARIO_FILE = "Training_Grounds.yaml"
 INVENTORY_FILE = "inventory.yaml"
@@ -19,11 +16,8 @@ class GameManager:
         """Initializes the game by loading all necessary data."""
         self.llm_config = llm_config
         self._load_data()
-        self._setup_game_state() # This method now creates our GameState object
-
-        # The GameManager now creates and owns the ActionHandler
+        self._setup_game_state()
         self.action_handler = ActionHandler(self.game_state, self.llm_config)
-
         self.turn_order = []
         self.current_turn_index = 0
         self.gui_text_log = ""
@@ -69,7 +63,6 @@ class GameManager:
         for player in environment.players:
             party.add_member(player)
 
-        # Create the single GameState object that holds all game data
         self.game_state = GameState(environment, party, game_history)
 
 
@@ -102,11 +95,9 @@ class GameManager:
             
             output_log.append(f"\n--- {current_character.name}'s Turn ---")
             
-            # The call to npc_action would also be updated to use GameState and ActionHandler
-            # For now, we'll pass the components from the game_state object
             npc_turn_result = npc_action(
                 current_character, 
-                self.game_state,  # Pass the whole state object
+                self.game_state,
                 self.action_handler,
                 self.llm_config
             )
@@ -116,13 +107,11 @@ class GameManager:
             if npc_turn_result.get("mechanical"):
                 mechanical_text = npc_turn_result["mechanical"]
                 output_log.append(f"Mechanics: {mechanical_text}")
-                # The ActionHandler or npc_action call itself should now handle history
                 
             self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
         return output_log
 
     def start_game(self):
-        # Use the game_state object to get players and actors
         all_combatants = self.game_state.players + self.game_state.actors
         
         initiative_rolls = []
@@ -151,22 +140,18 @@ class GameManager:
         
         if not player_character.is_player:
             return "ERROR: Game is expecting an NPC to act, not a player. State is out of sync."
-
-        # --- UPDATED FUNCTION CALL ---
-        # The call to player_action is now much cleaner.
+        
         mechanical_result = player_action(
             command,
             player_character,
-            self.game_state,      # Pass the whole state object
-            self.action_handler,  # Pass the handler
+            self.game_state,
+            self.action_handler,
             self.llm_config
         )
 
         if mechanical_result:
             output_log.append(f"Mechanics: {mechanical_result}")
-            # The ActionHandler now adds the result to game_history, so we don't need to do it here.
         else:
-            # If no mechanical action was taken, it's dialogue.
             self.game_state.game_history.add_dialogue(player_character.name, command)
             output_log.append(f"{player_character.name}: \"{command}\"")
             

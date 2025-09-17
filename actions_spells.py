@@ -1,6 +1,5 @@
 import random
-from classes import ActiveEffect
-from game_state import GameState # <-- Import GameState
+from classes import ActiveEffect, GameState
 
 def apply_armor(game_state: GameState, target_name: str, dodge_bonus: int, duration_text: str):
     """
@@ -30,7 +29,6 @@ def apply_charm(game_state: GameState, target_name: str, duration_text: str):
     effect = ActiveEffect(name="Charmed", duration_text=duration_text, target=target)
     game_state.party.active_effects.append(effect)
     
-    # In a more complex system, this would change the NPC's attitude.
     return f"{target.name} is now charmed. They view the caster as a friend. Effect: {effect}"
 
 def apply_strength_buff(game_state: GameState, target_name: str, duration_text: str):

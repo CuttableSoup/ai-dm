@@ -1,21 +1,16 @@
-# llm_spell_calls.py
 import requests
 import json
 import textwrap
-import copy
 from actions_spells import apply_armor, apply_charm, apply_strength_buff
-from game_state import GameState # <-- Import GameState
+from classes import GameState
 
-# A dictionary to map function names to the actual functions
 SPELL_FUNCTION_MAP = {
     "apply_armor": apply_armor,
     "apply_charm": apply_charm,
     "apply_strength_buff": apply_strength_buff
 }
 
-# The list of tools remains unchanged
 SPELL_TOOLS = [
-    # ... (no changes to the SPELL_TOOLS list) ...
 ]
 
 def resolve_spell_effect(caster, spell, target, game_state: GameState, llm_config: dict):

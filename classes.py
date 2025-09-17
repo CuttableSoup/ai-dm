@@ -1,8 +1,6 @@
-# classes.py
 from collections import deque
 from d6_rules import D6_SKILLS_BY_ATTRIBUTE
 
-output_log = []
 class ActiveEffect:
     """Represents an ongoing spell or condition on a character."""
     def __init__(self, name, duration_text, target):
@@ -17,10 +15,8 @@ class Object:
     """Represents a static object in the game world."""
     def __init__(self, object_data, room_id, zone_id=None):
         self.source_data = object_data
-        # Use setattr to dynamically assign attributes from the object's data dictionary
         for key, value in object_data.items():
             setattr(self, key, value)
-        # Store location for easy reference
         self.location = {'room_id': room_id, 'zone': zone_id}
 
 class Environment:
@@ -30,21 +26,17 @@ class Environment:
         self.doors = {door['door_id']: door for door in scenario_data.get('environment', {}).get('doors', [])}
         self.all_items = {item['name'].lower(): item for item in all_items}
         
-        self.objects = [] # A list to hold all Object instances
-        self.actors = []  # A list to hold all Actor instances
-        self.players = [] # A list to hold player-controlled Actor instances
+        self.objects = []
+        self.actors = []
+        self.players = []
 
-        # --- Instantiate Objects ---
         for room in self.rooms.values():
-            # Instantiate objects defined globally in the room
             for obj_data in room.get('objects', []):
                 self.objects.append(Object(obj_data, room['room_id']))
-            # Instantiate objects defined within specific zones
             for zone_data in room.get('zones', []):
                 for obj_data in zone_data.get('objects', []):
                     self.objects.append(Object(obj_data, room['room_id'], zone_data.get('zone')))
 
-        # --- Instantiate Players ---
         for player_data in players_data:
             sheet_path = player_data['sheet']
             char_sheet = load_character_sheet_func(sheet_path)
@@ -55,7 +47,6 @@ class Environment:
             else:
                 print(f"Warning: Could not load player character sheet: {sheet_path}")
 
-        # --- Instantiate NPCs ---
         for actor_data in actors_data:
             sheet_path = actor_data['sheet']
             char_sheet = load_character_sheet_func(sheet_path)
@@ -106,6 +97,11 @@ class Environment:
 
     def get_item_details(self, item_name):
         return self.all_items.get(item_name.lower())
+    
+    def get_spell_details(self, spell_name):
+        """Finds spell details from the game's loaded spells data."""
+        all_spells = getattr(self, 'all_spells', {}) 
+        return all_spells.get(spell_name.lower())
 
 class Actor:
     """Represents an actor in the game."""
@@ -153,22 +149,19 @@ class Party:
     def __init__(self, name="The Adventurers"):
         self.name = name
         self.members = []
-        self.reputation = {}  # Tracks reputation with different factions
-        self.inventory = []   # A shared party inventory
+        self.reputation = {}
+        self.inventory = []
         self.active_effects = []
 
     def add_member(self, character):
         """Adds a character to the party."""
-        output_log = []
         if character not in self.members:
             self.members.append(character)
-            output_log.append(f"{character.name} has joined the party '{self.name}'.")
 
     def remove_member(self, character):
         """Removes a character from the party."""
         if character in self.members:
             self.members.remove(character)
-            output_log.append(f"{character.name} has left the party '{self.name}'.")
 
     def get_party_members(self):
         """Returns a list of all current party members."""
@@ -181,3 +174,79 @@ class Party:
         
         status_lines = [f"{member.name} (HP: {member.cur_hp}/{member.max_hp})" for member in self.members]
         return "\n".join(status_lines)
+    
+class GameState:
+    """
+    A container for all the core components of the game world state.
+    This makes it easier to pass the game state around without having
+    functions with dozens of arguments.
+    """
+    def __init__(self, environment: Environment, party: Party, game_history: GameHistory):
+        self.environment = environment
+        self.party = party
+        self.game_history = game_history
+        self.players = environment.players
+        self.actors = environment.actors
+        self.llm_log = []
+
+    def find_actor_by_name(self, name: str):
+        """Utility function to find any actor (player or NPC) by name."""
+        name_lower = name.lower()
+        for p in self.players:
+            if p.name.lower() == name_lower:
+                return p
+        for a in self.actors:
+            if a.name.lower() == name_lower:
+                return a
+        return None
+
+import actions
+from classes import GameState
+
+class ActionHandler:
+    """
+    This class is the central dispatcher for all game actions.
+    It takes a function call from the LLM and executes the
+    corresponding mechanical function from the actions.py module.
+    """
+    def __init__(self, game_state: GameState, llm_config: dict):
+        self.game_state = game_state
+        self.llm_config = llm_config
+
+        self.function_map = {
+            "execute_skill_check": actions.execute_skill_check,
+            "manage_item": actions.manage_item,
+            "manage_party_member": actions.manage_party_member,
+            "move_party": actions.move_party,
+            "cast_spell": actions.cast_spell,
+        }
+
+    def execute_action(self, actor, function_name: str, arguments: dict):
+        """
+        Executes a game action based on the function name and arguments.
+
+        Returns:
+            A string summarizing the mechanical result of the action.
+        """
+        if function_name not in self.function_map:
+            error_msg = f"Error: The AI tried to call an unknown function '{function_name}'."
+            self.game_state.game_history.add_action(actor.name, error_msg)
+            return error_msg
+
+        action_function = self.function_map[function_name]
+
+        arguments['game_state'] = self.game_state
+        arguments['actor'] = actor
+        
+        if function_name == "cast_spell":
+            arguments['llm_config'] = self.llm_config
+
+        try:
+            mechanical_result = action_function(**arguments)
+            if mechanical_result:
+                self.game_state.game_history.add_action(actor.name, mechanical_result)
+            return mechanical_result
+        except Exception as e:
+            error_msg = f"Error executing function '{function_name}': {e}"
+            self.game_state.game_history.add_action(actor.name, error_msg)
+            return error_msg

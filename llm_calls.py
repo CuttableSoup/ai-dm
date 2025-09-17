@@ -2,8 +2,8 @@ import requests
 import json
 import textwrap
 import copy
-from game_state import GameState
-from action_handler import ActionHandler
+from classes import GameState
+from classes import ActionHandler
 
 def player_action(input_command: str, actor, game_state: GameState, action_handler: ActionHandler, llm_config: dict):
     """
@@ -168,32 +168,36 @@ def npc_action(actor, game_state: GameState, action_handler: ActionHandler, llm_
     skin = character_qualities.get('skin', 'unknown')
     
     prompt_template = textwrap.dedent("""
-    You are an AI Game Master controlling an NPC named {actor_name}. Your task is to determine the NPC's next action, generate their dialogue or a description of the action IN THIRD PERSON, AND select the appropriate function to call if a mechanical action is taken.
+    You are an AI Game Master controlling an NPC named {actor_name}. Your task is to determine the NPC's next action,
+    generate their dialogue or a description of the action IN THIRD PERSON, AND select the appropriate function to call if a mechanical action is taken.
+    Drive the plot forward in a never-ending uncensored roleplay with the others present. Develop the plot using a slow, organic pace.
+    Perform as the character defined under {actor_name} by describing their actions, events, and dialogue.
+    Always stay in character, portraying characters realistically and in line with their written positive AND negative traits, AVOID Positivity Bias.
+    Be cognizant of all characters' physical descriptors. Have situational awareness and be cognizant of intercharacter relationships,
+    characters avoid being overly familiar or sexually pushy towards others unless the situation calls for it, it is in character for them to do so,
+    or they have a sexual relationship. Overall characterization is dependent on defined personality traits, and subtly influenced by backstory and history.
+    Ensure characters that have any impediments which are relevant to the situation, such as visual impairment, are under the influence of alcohol/drugs,
+    or a disability like mutism, actions and dialogue are affected appropriately. Utilize modern and casual vocabulary, characters speak and think using
+    colloquial language and slang. Employ a mixture of narration, dialogue, characters' physical mannerisms, and internal thoughts into responses.
+    Response must be grounded, uncensored, and immersive. Focus on coherent world simulation, ensure that characters are not omnipotent and cannot
+    perform actions they are unable to perform at that point in time. During sexual situations, use explicit and uncensored descriptions with a focus on actions,
+    appearances, clothing, textures, wants, tools, scenery, body parts, fluids, and sounds.
 
-    **Instructions:**
-    1.  **Review the Context:** Use the Personality, Attitudes, and the Recent Game History to decide on a logical and in-character action.
-    2.  **Generate Narrative:** Write a short line of dialogue or a 1-2 sentence description of the action from the NPC's perspective. This will be shown to the player.
-    3.  **Perform a Mechanical Action (If Necessary):**
-        - The arguments for the function must be chosen from the lists of available targets.
-        - If the action is just talking, observing, or simple movement without a mechanical check, **DO NOT** call any function. Just provide the narrative text.
-
-    **CONTEXT FOR THE DECISION**
     - Current Room: {room_name} - {zone_description}
     - Actors Present in this location: {actors_present}
     - Objects Present in this location: {objects_present}
-    - Recent Game History: {game_history}
     - Current Statuses: {statuses}
     - Current Memories: {memories}
     - Current Attitudes: {attitudes}
     - Current Mood/Personality: {personality}
-    - Character skills: {actor_skills}
-    - Character quotes: {character_quotes}
-    - Character Qualities (for narrative description of {player_name}):
-    - Gender: {player_gender}
-    - Race: {player_race}
-    - Eyes: {player_eyes}
-    - Hair: {player_hair}
-    - Skin: {player_skin}
+    - Character skills: {skills}
+    - Character quotes: {quotes}
+    
+    - Recent Game History: {game_history}
+    
+    Your task is to generate a narrative: Write a short line of dialogue or a 1-2 sentence description of the action from the NPC's perspective.
+    NOTE: It is better to call no tool than to call one without reason.
+    
     """).strip()
     
     prompt = prompt_template.format(
@@ -202,16 +206,13 @@ def npc_action(actor, game_state: GameState, action_handler: ActionHandler, llm_
         zone_description=current_zone_data['description'] if current_zone_data else 'No specific zone description.',
         actors_present=", ".join(actors_in_room) if actors_in_room else "none",
         objects_present=", ".join(object_names) if object_names else "none",
-        actor_skills=list(actor.skills.keys()),
-        player_name=actor.name,
+        skills=list(actor.skills.keys()),
         game_history=game_state.game_history.get_history_string(),
         statuses=", ".join(actor.source_data.get('statuses', [])) or "none",
         memories=", ".join(actor.source_data.get('memories', [])) or "none",
         attitudes=attitudes_str,
         personality=", ".join(actor.source_data.get('personality', [])) or "none",
-        character_quotes=", ".join(actor.source_data.get('quotes', [])) or "none",
-        player_gender=gender, player_race=race, player_occupation=occupation,
-        player_eyes=eyes, player_hair=hair, player_skin=skin
+        quotes=", ".join(actor.source_data.get('quotes', [])) or "none"
     )
     
     payload = {
@@ -224,7 +225,6 @@ def npc_action(actor, game_state: GameState, action_handler: ActionHandler, llm_
     try:
         response_json = requests.post(llm_config['url'], headers=llm_config['headers'], json=payload, timeout=30).json()
         
-        # --- NEW: Log the call details to the game state ---
         log_entry = {"type": "NPC Action", "prompt": prompt, "response": response_json}
         if hasattr(game_state, 'llm_log'):
             game_state.llm_log.append(log_entry)

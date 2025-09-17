@@ -1,11 +1,7 @@
-# d6_rules.py
 import random
 
-# A list of skills that are primarily used for combat and can cause damage.
 COMBAT_SKILLS = ["melee", "missiles", "throwing"]
 
-# This dictionary maps each skill to its governing attribute.
-# This is crucial for determining the total number of dice to roll for a skill check.
 D6_SKILLS_BY_ATTRIBUTE = {
     "physique": [
         "athletics", "melee", "throwing", "fortitude", "strength"
@@ -24,7 +20,6 @@ D6_SKILLS_BY_ATTRIBUTE = {
     ],
 }
 
-# This dictionary defines which skills can be used to oppose another skill check.
 OPPOSED_SKILLS = {
     "deception": ["observation"],
     "melee": ["melee", "dodge"],
@@ -32,7 +27,6 @@ OPPOSED_SKILLS = {
     "missiles": ["dodge"]
 }
 
-# --- D6 Dice Mechanics ---
 def roll_d6_dice(pips_to_roll):
     """Rolls a number of d6s based on pips."""
     pips_to_roll = max(0, int(pips_to_roll))
