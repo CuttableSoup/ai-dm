@@ -2,23 +2,14 @@ import requests
 import json
 import textwrap
 import copy
-# --- UPDATED IMPORTS ---
-# We no longer import the specific actions, just the new state/handler classes.
 from game_state import GameState
 from action_handler import ActionHandler
 
-# ---------------------------------------------------------------------------
-# The `execute_function_call` helper function has been REMOVED from this file.
-# Its logic is now handled by the new `ActionHandler` class for better
-# separation of concerns.
-# ---------------------------------------------------------------------------
-
-def player_action(input_command: str, actor, game_state: GameState, action_handler: ActionHandler, llm_config: dict, debug=False):
+def player_action(input_command: str, actor, game_state: GameState, action_handler: ActionHandler, llm_config: dict):
     """
     Sends the current game state and player command to the AI model.
     If the AI chooses an action, this function uses the ActionHandler to execute it.
     """
-    # --- CONTEXT GATHERING (now using the GameState object) ---
     current_room, current_zone_data = game_state.environment.get_current_room_data(actor.location)
     
     objects_in_zone = game_state.environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
@@ -78,36 +69,21 @@ def player_action(input_command: str, actor, game_state: GameState, action_handl
         "tools": llm_config['tools'],
         "tool_choice": "auto"
     }
-    
-    if debug:
-        print("\n--- LLM Narrative Request Payload ---")
-        prompt_content = payload["messages"][0]["content"]
-        print("--- Prompt ---")
-        print(prompt_content)
-        print("--- End Prompt ---")
-        
-        temp_payload_for_log = copy.deepcopy(payload)
-        temp_payload_for_log["messages"][0]["content"] = "[See prompt above]"
-        print(json.dumps(temp_payload_for_log, indent=2))
-        print("-----------------------------------\n")
         
     try:
-        response = requests.post(llm_config['url'], headers=llm_config['headers'], json=payload, timeout=30).json()
-        
-        if debug:
-            print(f"\n--- LLM Raw Response ---\n{json.dumps(response, indent=2)}\n------------------------\n")
+        response_json = requests.post(llm_config['url'], headers=llm_config['headers'], json=payload, timeout=30).json()
+        log_entry = {"type": "Player Action", "prompt": prompt, "response": response_json}
+        if hasattr(game_state, 'llm_log'):
+            game_state.llm_log.append(log_entry)
             
-        message = response.get("choices", [{}])[0].get("message", {})
+        message = response_json.get("choices", [{}])[0].get("message", {})
         if not message.get("tool_calls"):
-            # No mechanical action was chosen.
             return None
             
         tool_call = message['tool_calls'][0]['function']
         function_name = tool_call['name']
         arguments = json.loads(tool_call['arguments'])
         
-        # --- SIMPLIFIED EXECUTION ---
-        # Instead of a giant if/elif chain, we delegate to the ActionHandler.
         return action_handler.execute_action(actor, function_name, arguments)
 
     except Exception as e:
@@ -115,11 +91,10 @@ def player_action(input_command: str, actor, game_state: GameState, action_handl
         game_state.game_history.add_action(actor.name, mechanical_result)
         return mechanical_result
 
-def narration(actor, game_state: GameState, mechanical_summary: str, llm_config: dict, debug=False):
+def narration(actor, game_state: GameState, mechanical_summary: str, llm_config: dict):
     """
     Generates a narrative summary of the events that just occurred.
     """
-    # --- CONTEXT GATHERING (now using the GameState object) ---
     current_room, current_zone_data = game_state.environment.get_current_room_data(actor.location)
 
     objects_in_zone = game_state.environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
@@ -158,33 +133,20 @@ def narration(actor, game_state: GameState, mechanical_summary: str, llm_config:
     
     payload = {"model": llm_config['model'], "messages": [{"role": "user", "content": prompt}]}
     
-    if debug:
-        print("\n--- LLM Response Request Payload ---")
-        prompt_content = payload["messages"][0]["content"]
-        print("--- Prompt ---")
-        print(prompt_content)
-        print("--- End Prompt ---")
-        
-        temp_payload_for_log = copy.deepcopy(payload)
-        temp_payload_for_log["messages"][0]["content"] = "[See prompt above]"
-        print(json.dumps(temp_payload_for_log, indent=2))
-        print("------------------------------------\n")
-
     try:
-        response = requests.post(llm_config['url'], headers=llm_config['headers'], json=payload, timeout=30).json()
+        response_json = requests.post(llm_config['url'], headers=llm_config['headers'], json=payload, timeout=30).json()
+        log_entry = {"type": "Narration", "prompt": prompt, "response": response_json}
+        if hasattr(game_state, 'llm_log'):
+            game_state.llm_log.append(log_entry)
         
-        if debug:
-            print(f"\n--- LLM Raw Response ---\n{json.dumps(response, indent=2)}\n------------------------\n")
-        
-        return response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        return response_json.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
     except Exception as e:
         return f"LLM Error: Could not get narration. {e}"
 
-def npc_action(actor, game_state: GameState, action_handler: ActionHandler, llm_config: dict, debug=False):
+def npc_action(actor, game_state: GameState, action_handler: ActionHandler, llm_config: dict):
     """
     Generates NPC dialogue and/or a mechanical action, returning both for processing.
     """
-    # --- CONTEXT GATHERING (now using the GameState object) ---
     current_room, current_zone_data = game_state.environment.get_current_room_data(actor.location)
     objects_in_zone = game_state.environment.get_objects_in_zone(actor.location['room_id'], actor.location['zone'])
     object_names = [obj.name for obj in objects_in_zone]
@@ -258,25 +220,16 @@ def npc_action(actor, game_state: GameState, action_handler: ActionHandler, llm_
         "tools": llm_config['tools'],
         "tool_choice": "auto"
     }
-    
-    if debug:
-        print("\n--- LLM Narrative Request Payload ---")
-        prompt_content = payload["messages"][0]["content"]
-        print("--- Prompt ---")
-        print(prompt_content)
-        print("--- End Prompt ---")
-        
-        temp_payload_for_log = copy.deepcopy(payload)
-        temp_payload_for_log["messages"][0]["content"] = "[See prompt above]"
-        print(json.dumps(temp_payload_for_log, indent=2))
-        print("-----------------------------------\n")
         
     try:
-        response = requests.post(llm_config['url'], headers=llm_config['headers'], json=payload, timeout=30).json()
-        message = response.get("choices", [{}])[0].get("message", {})
+        response_json = requests.post(llm_config['url'], headers=llm_config['headers'], json=payload, timeout=30).json()
         
-        if debug:
-            print(f"\n--- LLM Raw Response ---\n{json.dumps(response, indent=2)}\n------------------------\n")
+        # --- NEW: Log the call details to the game state ---
+        log_entry = {"type": "NPC Action", "prompt": prompt, "response": response_json}
+        if hasattr(game_state, 'llm_log'):
+            game_state.llm_log.append(log_entry)
+
+        message = response_json.get("choices", [{}])[0].get("message", {})
         
         narrative_output = message.get("content", "").strip()
         mechanical_result = None
@@ -287,7 +240,6 @@ def npc_action(actor, game_state: GameState, action_handler: ActionHandler, llm_
         if message.get("tool_calls"):
             tool_call = message['tool_calls'][0]['function']
             arguments = json.loads(tool_call['arguments'])
-            # Use the action handler to execute the NPC's chosen action
             mechanical_result = action_handler.execute_action(actor, tool_call['name'], arguments)
         
         return {"narrative": narrative_output, "mechanical": mechanical_result}

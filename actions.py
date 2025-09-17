@@ -343,8 +343,7 @@ def cast_spell(actor, spell_name: str, target_name: str, game_state: GameState, 
         party=game_state.party,
         players=game_state.players,
         actors=game_state.actors,
-        llm_config=llm_config,
-        debug=True 
+        llm_config=llm_config
     )
     
     return mechanical_result

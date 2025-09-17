@@ -18,7 +18,7 @@ class CharacterCreatorWindow(tk.Toplevel):
         # --- Initialize Data ---
         self.points_pool = STARTING_POINTS
         self.character_data = self._initialize_character_data()
-        self.value_labels = {} # To store references to the value labels for easy updates
+        self.value_labels = {}
 
         # --- Build UI ---
         self._create_widgets()

@@ -1,12 +1,6 @@
-# actions_spells.py
 import random
 from classes import ActiveEffect
 from game_state import GameState # <-- Import GameState
-
-# -------------------------------------------------------------------------
-# The `find_actor_by_name` utility function has been REMOVED from this file.
-# This functionality is now a method on the GameState object.
-# -------------------------------------------------------------------------
 
 def apply_armor(game_state: GameState, target_name: str, dodge_bonus: int, duration_text: str):
     """

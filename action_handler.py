@@ -12,8 +12,6 @@ class ActionHandler:
         self.game_state = game_state
         self.llm_config = llm_config
 
-        # This dictionary maps the function names the LLM can call
-        # to the actual Python functions in the actions module.
         self.function_map = {
             "execute_skill_check": actions.execute_skill_check,
             "manage_item": actions.manage_item,

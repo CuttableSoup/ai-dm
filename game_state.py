@@ -15,6 +15,7 @@ class GameState:
         # We can derive players and actors directly from the environment
         self.players = environment.players
         self.actors = environment.actors
+        self.llm_log = []
 
     def find_actor_by_name(self, name: str):
         """Utility function to find any actor (player or NPC) by name."""

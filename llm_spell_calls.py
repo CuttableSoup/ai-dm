@@ -18,7 +18,7 @@ SPELL_TOOLS = [
     # ... (no changes to the SPELL_TOOLS list) ...
 ]
 
-def resolve_spell_effect(caster, spell, target, game_state: GameState, llm_config: dict, debug=False):
+def resolve_spell_effect(caster, spell, target, game_state: GameState, llm_config: dict):
     """
     Makes a focused LLM call to determine the mechanical effect of a spell.
     Now passes the GameState object to the mechanical functions.
@@ -53,12 +53,10 @@ def resolve_spell_effect(caster, spell, target, game_state: GameState, llm_confi
         "tool_choice": "auto"
     }
     
-    # ... (debug printing logic remains the same) ...
 
     try:
         response = requests.post(llm_config['url'], headers=llm_config['headers'], json=payload, timeout=30).json()
         
-        # ... (debug printing logic remains the same) ...
             
         message = response.get("choices", [{}])[0].get("message", {})
         if not message.get("tool_calls"):
@@ -69,8 +67,6 @@ def resolve_spell_effect(caster, spell, target, game_state: GameState, llm_confi
         arguments = json.loads(tool_call['arguments'])
 
         if function_name in SPELL_FUNCTION_MAP:
-            # --- UPDATED FUNCTION CALL ---
-            # Pass the game_state object to the function instead of individual components.
             return SPELL_FUNCTION_MAP[function_name](game_state=game_state, **arguments)
         else:
             return f"Error: AI chose an unknown spell function '{function_name}'."

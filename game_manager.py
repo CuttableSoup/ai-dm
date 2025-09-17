@@ -11,7 +11,6 @@ from classes import Environment, GameHistory, Party # Still need these for initi
 
 SCENARIO_FILE = "Training_Grounds.yaml"
 INVENTORY_FILE = "inventory.yaml"
-DEBUG = True
 
 class GameManager:
     """Manages the overall game state, logic, and turn progression."""
@@ -109,8 +108,7 @@ class GameManager:
                 current_character, 
                 self.game_state,  # Pass the whole state object
                 self.action_handler,
-                self.llm_config, 
-                DEBUG
+                self.llm_config
             )
             
             if npc_turn_result.get("narrative"):
@@ -161,8 +159,7 @@ class GameManager:
             player_character,
             self.game_state,      # Pass the whole state object
             self.action_handler,  # Pass the handler
-            self.llm_config,
-            DEBUG
+            self.llm_config
         )
 
         if mechanical_result:

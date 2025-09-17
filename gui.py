@@ -140,10 +140,12 @@ class DebugWindow(tk.Toplevel):
         self.tab_history = Frame(self.notebook)
         self.tab_party = Frame(self.notebook)
         self.tab_environment = Frame(self.notebook)
+        self.tab_llm_log = Frame(self.notebook)
 
         self.notebook.add(self.tab_inspector, text="Object Inspector")
         self.notebook.add(self.tab_initiative, text="Initiative")
         self.notebook.add(self.tab_history, text="Game History")
+        self.notebook.add(self.tab_llm_log, text="LLM Log")
         self.notebook.add(self.tab_party, text="Party")
         self.notebook.add(self.tab_environment, text="Environment")
         
@@ -152,6 +154,7 @@ class DebugWindow(tk.Toplevel):
         self._create_history_tab()
         self._create_party_tab()
         self._create_environment_tab()
+        self._create_llm_log_tab()
 
     def refresh_all_tabs(self):
         """Refreshes the content of all tabs in the debug panel."""
@@ -160,6 +163,7 @@ class DebugWindow(tk.Toplevel):
         self.refresh_history_tab()
         self.refresh_party_tab()
         self.refresh_environment_tab()
+        self.refresh_llm_log_tab()
 
     def _on_mousewheel(self, event, canvas):
         """Cross-platform mouse wheel scrolling."""
@@ -208,7 +212,6 @@ class DebugWindow(tk.Toplevel):
             else:
                 blank_item[k] = False
         
-        # Ensure any object that should have an equipped status gets one
         equipped_keys = ['equipped', 'prepared']
         has_equipped_key = any(key in blank_item for key in equipped_keys)
         if not has_equipped_key:
@@ -224,6 +227,21 @@ class DebugWindow(tk.Toplevel):
 
     def _create_structured_list_row(self, parent_frame, item_dict, widget_list, attr_name):
         """Creates the UI for a single structured list item and adds it to the list."""
+
+        # --- FIX STARTS HERE ---
+        # If the item from the list is a simple string instead of a dictionary,
+        # we convert it into a dictionary on the fly. This handles cases where
+        # a character sheet might have a simplified list like `spells: ["Fireball"]`.
+        if isinstance(item_dict, str):
+            # Determine the primary key based on the attribute's name
+            primary_key = 'name'  # A sensible default
+            if attr_name == 'inventory':
+                primary_key = 'item'
+            
+            # Convert the string into a dictionary
+            item_dict = {primary_key: item_dict}
+        # --- FIX ENDS HERE ---
+
         item_widgets = {}
         row_frame = Frame(parent_frame, bd=1, relief=tk.RIDGE)
         row_frame.pack(fill=tk.X, expand=True, padx=2, pady=2)
@@ -233,14 +251,14 @@ class DebugWindow(tk.Toplevel):
         right_frame = Frame(row_frame)
         right_frame.pack(side=tk.RIGHT)
 
-        # UNIVERSAL CHECK: Ensure any dictionary item gets an equipped/prepared key if it lacks one.
         equipped_keys = ['equipped', 'prepared']
+        
+        # Now that we've ensured item_dict is a dictionary, this check is safer.
         has_equipped_key = any(key in item_dict for key in equipped_keys)
-        if isinstance(item_dict, dict) and not has_equipped_key:
+        if not has_equipped_key:
             key_to_add = 'prepared' if attr_name == 'spells' else 'equipped'
             item_dict[key_to_add] = False
 
-        # Sort to ensure the equipped checkbox always appears on the far right
         sorted_items = sorted(item_dict.items(), key=lambda x: x[0] not in equipped_keys and x[0] != 'quantity')
         
         for key, val in sorted_items:
@@ -340,7 +358,6 @@ class DebugWindow(tk.Toplevel):
         self.displayed_entities.clear()
         if not self.game_manager.turn_order: return
 
-        # --- UPDATED DATA ACCESS ---
         game_state = self.game_manager.game_state
         current_actor = self.game_manager.turn_order[self.game_manager.current_turn_index]
         all_entities = game_state.environment.players + game_state.environment.actors + game_state.environment.objects
@@ -368,9 +385,7 @@ class DebugWindow(tk.Toplevel):
             value = getattr(self.selected_entity, attr_name, [])
             tk.Label(self.details_frame, text=attr_name).grid(row=i, column=0, sticky="nw", padx=5, pady=5)
             
-            # Condition to identify any list of dictionary-like objects
             is_structured_list = isinstance(value, list) and value and isinstance(value[0], dict)
-            # Also treat known empty lists as structured
             if not is_structured_list and attr_name in ['inventory', 'spells', 'abilities', 'actions'] and isinstance(value, list):
                  is_structured_list = True
 
@@ -440,7 +455,6 @@ class DebugWindow(tk.Toplevel):
             self._create_structured_list_row(scrollable_frame, item_dict, item_widget_list, attr_name)
         self._bind_scroll_recursive(scrollable_frame, list_canvas)
         
-        # Use existing item as a template, or create a default one if the list is empty
         template = value[0] if value else {}
         if not template:
             if attr_name == 'inventory':
@@ -451,7 +465,7 @@ class DebugWindow(tk.Toplevel):
                 template = {'name': 'new_ability', 'effect': 'description'}
             elif attr_name == 'actions':
                  template = {"skill": "strength", "difficulty": 10, "pass": "success", "fail": "nothing"}
-            else: # A generic fallback for other unknown list types
+            else:
                 template = {'name': 'new_item', 'description': 'a new description'}
 
         add_button = Button(main_container, text="+ Add New Item", command=lambda sf=scrollable_frame, iwl=item_widget_list, t=template, an=attr_name: self._add_structured_item(sf, iwl, t, an))
@@ -506,7 +520,6 @@ class DebugWindow(tk.Toplevel):
 
                 elif isinstance(collection, list) and isinstance(orig_val, list):
                     if collection and isinstance(collection[0], dict):
-                        # This now handles all structured lists, including inventory
                         new_list_of_dicts = []
                         for item_widget_dict in collection:
                             new_item_dict = {}
@@ -514,11 +527,9 @@ class DebugWindow(tk.Toplevel):
                                 val = widget.get() if isinstance(widget, (tk.BooleanVar, Entry)) else widget
                                 new_item_dict[key] = val
                             
-                            # Attempt to cast saved values back to their original types
                             template_dict = (orig_val[0] if orig_val else {}) or new_item_dict
                             for key in new_item_dict:
                                 if key in template_dict:
-                                    # Use string as a fallback type
                                     orig_type = type(template_dict.get(key, ''))
                                     try:
                                         current_val = new_item_dict[key]
@@ -588,7 +599,6 @@ class DebugWindow(tk.Toplevel):
         if not self.game_manager.turn_order: return
         self.history_text.config(state='normal')
         self.history_text.delete('1.0', tk.END)
-        # --- UPDATED DATA ACCESS ---
         history_str = self.game_manager.game_state.game_history.get_history_string()
         self.history_text.insert('1.0', history_str)
         self.history_text.config(state='disabled')
@@ -600,7 +610,6 @@ class DebugWindow(tk.Toplevel):
 
     def refresh_party_tab(self):
         if not self.game_manager.turn_order: return
-        # --- UPDATED DATA ACCESS ---
         party = self.game_manager.game_state.party
         party_status = f"Party Name: {party.name}\n\n"
         party_status += "--- Members ---\n"
@@ -609,9 +618,38 @@ class DebugWindow(tk.Toplevel):
         self.party_text.delete('1.0', tk.END)
         self.party_text.insert('1.0', party_status)
         self.party_text.config(state='disabled')
-        
-    # --- ENVIRONMENT TAB METHODS START HERE ---
 
+    # --- NEW: LLM LOG TAB METHODS START HERE ---
+    def _create_llm_log_tab(self):
+        """Creates the widgets for the LLM Log tab."""
+        self.llm_log_text = scrolledtext.ScrolledText(self.tab_llm_log, wrap=tk.WORD, state='disabled', font=("Courier", 10))
+        self.llm_log_text.pack(fill="both", expand=True)
+        self.refresh_llm_log_tab()
+        
+    def refresh_llm_log_tab(self):
+        """Populates the LLM Log tab with the latest call data."""
+        if not self.game_manager.turn_order or not hasattr(self.game_manager.game_state, 'llm_log'):
+            return
+
+        self.llm_log_text.config(state='normal')
+        self.llm_log_text.delete('1.0', tk.END)
+
+        full_log_text = ""
+        log_entries = self.game_manager.game_state.llm_log
+        for i, entry in enumerate(log_entries):
+            full_log_text += f"--- Entry {i+1}: {entry.get('type', 'Unknown')} ---\n\n"
+            full_log_text += "--- PROMPT SENT TO MODEL ---\n"
+            full_log_text += f"{entry.get('prompt', 'No prompt recorded.')}\n\n"
+            full_log_text += "--- RAW JSON RESPONSE ---\n"
+            response_json = entry.get('response', {})
+            full_log_text += f"{json.dumps(response_json, indent=2)}\n\n"
+            full_log_text += "=" * 50 + "\n\n"
+
+        self.llm_log_text.insert('1.0', full_log_text)
+        self.llm_log_text.config(state='disabled')
+        self.llm_log_text.see(tk.END) # Auto-scroll to the bottom
+
+    # --- ENVIRONMENT TAB METHODS START HERE ---
     def _get_descriptive_name(self, item, index):
         item_node_name = f"Item {index+1}"
         if isinstance(item, dict):
@@ -693,7 +731,6 @@ class DebugWindow(tk.Toplevel):
         self.selected_env_item = None
         self._update_add_menu()
 
-        # --- UPDATED DATA ACCESS ---
         env = self.game_manager.game_state.environment
         if hasattr(env, 'rooms') and isinstance(env.rooms, dict):
             rooms_root = self.env_tree.insert("", "end", text="Rooms", open=True)
@@ -843,7 +880,6 @@ class DebugWindow(tk.Toplevel):
             self.add_menu.add_command(label="(Nothing to add here)", state="disabled")
             
     def _add_new_room(self):
-        # --- UPDATED DATA ACCESS ---
         rooms, i = self.game_manager.game_state.environment.rooms, 1
         while f"new_room_{i}" in rooms: i += 1
         new_id = f"new_room_{i}"
@@ -851,7 +887,6 @@ class DebugWindow(tk.Toplevel):
         self.refresh_environment_tab()
 
     def _add_new_door(self):
-        # --- UPDATED DATA ACCESS ---
         doors, i = self.game_manager.game_state.environment.doors, 1
         while f"new_door_{i}" in doors: i += 1
         new_id = f"new_door_{i}"
@@ -879,14 +914,18 @@ if __name__ == "__main__":
     class DummyGameManager:
         def __init__(self): 
             self.turn_order = []
-            # The dummy needs a dummy game_state for the debug panel to work
             class DummyState:
                 class DummyEnv:
                     rooms = {}
                     doors = {}
+                class DummyHistory:
+                    def get_history_string(self): return "Dummy history."
                 party = None
-                game_history = None
+                game_history = DummyHistory()
                 environment = DummyEnv()
+                llm_log = [
+                    {"type": "Dummy Call", "prompt": "This is a test prompt.", "response": {"result": "ok"}}
+                ] # Add dummy log for testing
             self.game_state = DummyState()
 
         def start_game(self): 
