@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext, Frame, Entry, Button, Menu, filedialog
 from character_creator import CharacterCreatorWindow
 import os
-import ast
 import json
 
 class GameGUI:
@@ -182,16 +181,30 @@ class DebugWindow(tk.Toplevel):
             if not isinstance(child, tk.Canvas):
                 self._bind_scroll_recursive(child, canvas)
 
-    def _add_simple_list_item(self, container_frame, entry_widget_list):
-        entry = Entry(container_frame)
-        entry.pack(fill=tk.X, expand=True, padx=2, pady=1)
-        entry_widget_list.append(entry)
+    def _add_simple_list_row(self, parent_frame, widget_list):
+        """Adds a new, blank, editable row to a simple list UI."""
+        self._create_simple_list_row(parent_frame, "", widget_list)
 
-    def _remove_simple_list_item(self, entry_widget_list):
-        if entry_widget_list:
-            widget_to_remove = entry_widget_list.pop()
-            widget_to_remove.destroy()
-    
+    def _remove_simple_list_row(self, row_frame, widget, widget_list):
+        """Removes a specific row from a simple list UI."""
+        row_frame.destroy()
+        if widget in widget_list:
+            widget_list.remove(widget)
+            
+    def _create_simple_list_row(self, parent_frame, item_text, widget_list):
+        """Creates a single row with an Entry and a Remove button."""
+        row_frame = Frame(parent_frame)
+        row_frame.pack(fill=tk.X, expand=True)
+
+        entry = Entry(row_frame, width=70)
+        entry.insert(0, str(item_text))
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5), pady=1)
+        widget_list.append(entry)
+
+        remove_button = Button(row_frame, text="X", fg="red", relief="flat", height=1,
+                               command=lambda rf=row_frame, w=entry, wl=widget_list: self._remove_simple_list_row(rf, w, wl))
+        remove_button.pack(side=tk.RIGHT)
+
     def _change_quantity(self, entry_widget, amount):
         try:
             current_val = int(entry_widget.get())
@@ -212,11 +225,12 @@ class DebugWindow(tk.Toplevel):
             else:
                 blank_item[k] = False
         
-        equipped_keys = ['equipped', 'prepared']
-        has_equipped_key = any(key in blank_item for key in equipped_keys)
-        if not has_equipped_key:
-            key_name = 'prepared' if attr_name == 'spells' else 'equipped'
-            blank_item[key_name] = False
+        if attr_name in ['inventory', 'spells']:
+            equipped_keys = ['equipped', 'prepared']
+            has_equipped_key = any(key in blank_item for key in equipped_keys)
+            if not has_equipped_key:
+                key_name = 'prepared' if attr_name == 'spells' else 'equipped'
+                blank_item[key_name] = False
             
         self._create_structured_list_row(scrollable_frame, blank_item, widget_list, attr_name)
 
@@ -225,14 +239,10 @@ class DebugWindow(tk.Toplevel):
         row_frame.destroy()
         widget_list.remove(widget_dict_to_remove)
 
-    def _create_structured_list_row(self, parent_frame, item_dict, widget_list, attr_name):
+    def _create_structured_list_row(self, parent_frame, item_data, widget_list, attr_name):
         """Creates the UI for a single structured list item and adds it to the list."""
-        if isinstance(item_dict, str):
-            primary_key = 'name'
-            if attr_name == 'inventory':
-                primary_key = 'item'
-            item_dict = {primary_key: item_dict}
-
+        item_dict = vars(item_data) if not isinstance(item_data, dict) else item_data
+        
         item_widgets = {}
         row_frame = Frame(parent_frame, bd=1, relief=tk.RIDGE)
         row_frame.pack(fill=tk.X, expand=True, padx=2, pady=2)
@@ -244,10 +254,11 @@ class DebugWindow(tk.Toplevel):
 
         equipped_keys = ['equipped', 'prepared']
         
-        has_equipped_key = any(key in item_dict for key in equipped_keys)
-        if not has_equipped_key:
-            key_to_add = 'prepared' if attr_name == 'spells' else 'equipped'
-            item_dict[key_to_add] = False
+        if attr_name in ['inventory', 'spells']:
+            has_equipped_key = any(key in item_dict for key in equipped_keys)
+            if not has_equipped_key:
+                key_to_add = 'prepared' if attr_name == 'spells' else 'equipped'
+                item_dict[key_to_add] = False
 
         sorted_items = sorted(item_dict.items(), key=lambda x: x[0] not in equipped_keys and x[0] != 'quantity')
         
@@ -289,19 +300,19 @@ class DebugWindow(tk.Toplevel):
             item_widgets_dict[key] = entry
 
     def _create_dict_row(self, parent_frame, key, value, widget_list):
-        """Creates a single editable row for the attitudes editor."""
+        """Creates a single editable row for a key-value pair editor."""
         row_frame = Frame(parent_frame)
         row_frame.pack(fill="x", expand=True, pady=1)
         
         key_entry = Entry(row_frame, font=("Arial", 10))
         key_entry.insert(0, str(key))
-        key_entry.pack(side="left", fill="x", expand=True)
+        key_entry.pack(side="left", fill="x", expand=True, padx=(0, 2))
 
-        tk.Label(row_frame, text=":", font=("Arial", 10, "bold")).pack(side="left", padx=3)
+        tk.Label(row_frame, text=":", font=("Arial", 10, "bold")).pack(side="left")
 
         val_entry = Entry(row_frame, font=("Arial", 10))
         val_entry.insert(0, str(value))
-        val_entry.pack(side="left", fill="x", expand=True)
+        val_entry.pack(side="left", fill="x", expand=True, padx=(2, 0))
         
         widget_tuple = (key_entry, val_entry)
         
@@ -312,11 +323,11 @@ class DebugWindow(tk.Toplevel):
         widget_list.append(widget_tuple)
 
     def _add_dict_item(self, parent_frame, widget_list):
-        """Adds a new, blank key-value entry row to the attitudes editor."""
-        self._create_dict_row(parent_frame, "Name", "Neutral", widget_list)
+        """Adds a new, blank key-value entry row to the editor."""
+        self._create_dict_row(parent_frame, "New Key", "New Value", widget_list)
 
     def _remove_dict_item(self, row_frame, widget_tuple, widget_list):
-        """Removes a row from the attitudes editor UI."""
+        """Removes a row from the key-value editor UI."""
         row_frame.destroy()
         if widget_tuple in widget_list:
             widget_list.remove(widget_tuple)
@@ -365,68 +376,57 @@ class DebugWindow(tk.Toplevel):
         for widget in self.details_frame.winfo_children(): widget.destroy()
         self.attribute_widgets = {}
         
-        all_attr_keys = set(vars(self.selected_entity).keys()) | {'memories', 'quotes'}
+        all_attr_keys = set(vars(self.selected_entity).keys())
         attrs = sorted([attr for attr in all_attr_keys if attr not in ['source_data', 'manager']])
 
         self.details_frame.grid_columnconfigure(1, weight=1)
         self._bind_scroll_recursive(self.details_frame, self.main_canvas)
         
         for i, attr_name in enumerate(attrs):
-            value = getattr(self.selected_entity, attr_name, [])
+            value = getattr(self.selected_entity, attr_name, None)
             tk.Label(self.details_frame, text=attr_name).grid(row=i, column=0, sticky="nw", padx=5, pady=5)
             
-            is_structured_list = isinstance(value, list) and value and isinstance(value[0], dict)
-            if not is_structured_list and attr_name in ['inventory', 'spells', 'abilities', 'actions'] and isinstance(value, list):
-                 is_structured_list = True
+            is_simple_list = isinstance(value, list) and (not value or isinstance(value[0], (str, int, float, bool)))
+            is_list = isinstance(value, list)
 
-            if is_structured_list:
+            if attr_name == 'attitudes' and is_list:
+                normalized_attitudes = {}
+                if value and isinstance(value[0], dict):
+                    normalized_attitudes = {k: v for d in value for k, v in d.items()}
+                self._create_dict_ui(self.details_frame, i, normalized_attitudes, attr_name)
+
+            elif is_list and not is_simple_list:
                 self._create_structured_list_ui(self.details_frame, i, value, attr_name)
-
-            elif attr_name in ['memories', 'quotes']:
+            
+            elif is_simple_list:
+                 self._create_simple_list_ui(self.details_frame, i, value, attr_name)
+            
+            elif attr_name == 'description':
                 widget = tk.Text(self.details_frame, height=5, wrap=tk.WORD)
-                if isinstance(value, list):
-                    widget.insert('1.0', '\n'.join(map(str, value)))
-                else:
-                    widget.insert('1.0', str(value))
+                widget.insert('1.0', str(value))
                 widget.grid(row=i, column=1, sticky="ew", padx=2, pady=2)
                 self.attribute_widgets[attr_name] = widget
-            
-            elif attr_name == 'attitudes':
-                normalized_attitudes = value if isinstance(value, dict) else {k: v for d in value for k, v in d.items()}
-                main_container = Frame(self.details_frame, bd=1, relief=tk.SOLID)
-                main_container.grid(row=i, column=1, sticky="ew", padx=2, pady=2)
-                items_frame = Frame(main_container)
-                items_frame.pack(fill="x", expand=True, padx=2, pady=2)
-                sub_widgets = []
-                for key, val in normalized_attitudes.items():
-                    self._create_dict_row(items_frame, key, val, sub_widgets)
-                add_button = Button(main_container, text="+ Add Attitude", command=lambda f=items_frame, w=sub_widgets: self._add_dict_item(f, w))
-                add_button.pack(fill="x", expand=True, side="bottom")
-                self.attribute_widgets[attr_name] = sub_widgets
-            
-            elif isinstance(value, list):
-                 self._create_simple_list_ui(self.details_frame, i, value, attr_name)
-                 
+
+            elif attr_name == 'equipment' and isinstance(value, dict):
+                self._create_fixed_key_dict_ui(self.details_frame, i, value, attr_name)
+
             elif isinstance(value, dict):
-                dict_frame = Frame(self.details_frame, bd=1, relief=tk.SOLID)
-                dict_frame.grid(row=i, column=1, sticky="ew", padx=2, pady=2)
-                dict_frame.grid_columnconfigure(1, weight=1)
-                sub_entries = {}
-                for j, (key, val) in enumerate(value.items()):
-                    tk.Label(dict_frame, text=key).grid(row=j, column=0, sticky="w", padx=2, pady=2)
-                    entry = Entry(dict_frame)
-                    entry.insert(0, str(val))
-                    entry.grid(row=j, column=1, sticky="ew", padx=2, pady=2)
-                    sub_entries[key] = entry
-                self.attribute_widgets[attr_name] = sub_entries
-            else:
+                self._create_dict_ui(self.details_frame, i, value, attr_name)
+
+            elif isinstance(value, bool):
+                bool_var = tk.BooleanVar(value=value)
+                chk = tk.Checkbutton(self.details_frame, variable=bool_var)
+                chk.grid(row=i, column=1, sticky="w", padx=2, pady=2)
+                self.attribute_widgets[attr_name] = bool_var
+
+            else: 
                 widget = Entry(self.details_frame)
                 widget.insert(0, str(value))
                 widget.grid(row=i, column=1, sticky="ew", padx=2, pady=2)
                 self.attribute_widgets[attr_name] = widget
-    
+
     def _create_structured_list_ui(self, parent, row_index, value, attr_name):
-        """Creates a generic UI for a list of dictionaries."""
+        """Creates a generic UI for a list of dictionaries or objects."""
         main_container = Frame(parent, bd=1, relief=tk.SOLID)
         main_container.grid(row=row_index, column=1, sticky="ew", padx=2, pady=2)
         main_container.grid_columnconfigure(0, weight=1)
@@ -441,20 +441,22 @@ class DebugWindow(tk.Toplevel):
         main_container.grid_rowconfigure(0, weight=1)
         item_widget_list = []
         self.attribute_widgets[attr_name] = item_widget_list
-        for item_dict in value:
-            self._create_structured_list_row(scrollable_frame, item_dict, item_widget_list, attr_name)
+        for item_data in value:
+            self._create_structured_list_row(scrollable_frame, item_data, item_widget_list, attr_name)
         self._bind_scroll_recursive(scrollable_frame, list_canvas)
         
-        template = value[0] if value else {}
+        template = {}
+        if value:
+            template_item = value[0]
+            template = vars(template_item) if not isinstance(template_item, dict) else template_item
+        
         if not template:
             if attr_name == 'inventory':
                 template = {'item': 'new_item', 'quantity': 1, 'equipped': False}
             elif attr_name == 'spells':
                 template = {'name': 'new_spell', 'level': 1, 'prepared': False}
-            elif attr_name == 'abilities':
-                template = {'name': 'new_ability', 'effect': 'description'}
-            elif attr_name == 'actions':
-                 template = {"skill": "strength", "difficulty": 10, "pass": "success", "fail": "nothing"}
+            elif attr_name == 'attitudes':
+                template = {'name': 'target', 'status': 'neutral'}
             else:
                 template = {'name': 'new_item', 'description': 'a new description'}
 
@@ -462,32 +464,59 @@ class DebugWindow(tk.Toplevel):
         add_button.grid(row=1, column=0, columnspan=2, sticky="ew")
 
     def _create_simple_list_ui(self, parent, row_index, value, attr_name):
+        """Creates an editable list of strings with per-item remove buttons."""
         list_container = Frame(parent, bd=1, relief=tk.SOLID)
         list_container.grid(row=row_index, column=1, sticky="ew", padx=2, pady=2)
         list_container.grid_columnconfigure(0, weight=1)
+
         list_canvas = tk.Canvas(list_container, height=120)
         list_scrollbar = tk.Scrollbar(list_container, orient="vertical", command=list_canvas.yview)
         scrollable_frame = Frame(list_canvas)
         scrollable_frame.bind("<Configure>", lambda e: list_canvas.configure(scrollregion=list_canvas.bbox("all")))
         list_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         list_canvas.configure(yscrollcommand=list_scrollbar.set)
-        list_canvas.grid(row=0, column=0, sticky="nsew")
+        
+        list_canvas.grid(row=0, column=0, columnspan=2, sticky="nsew")
         list_scrollbar.grid(row=0, column=1, sticky="ns")
         list_container.grid_rowconfigure(0, weight=1)
+
         entry_widgets = []
-        for item in value:
-            entry = Entry(scrollable_frame)
-            entry.insert(0, str(item))
-            entry.pack(fill=tk.X, expand=True, padx=2, pady=1)
-            entry_widgets.append(entry)
         self.attribute_widgets[attr_name] = entry_widgets
+        for item in value:
+            self._create_simple_list_row(scrollable_frame, item, entry_widgets)
+        
         self._bind_scroll_recursive(scrollable_frame, list_canvas)
-        button_frame = Frame(list_container)
-        button_frame.grid(row=1, column=0, columnspan=2, sticky="ew")
-        add_button = Button(button_frame, text="+ Add Item", command=lambda sf=scrollable_frame, ew=entry_widgets: self._add_simple_list_item(sf, ew))
-        add_button.pack(side=tk.LEFT, expand=True, fill=tk.X)
-        remove_button = Button(button_frame, text="- Remove Last", command=lambda ew=entry_widgets: self._remove_simple_list_item(ew))
-        remove_button.pack(side=tk.LEFT, expand=True, fill=tk.X)
+
+        add_button = Button(list_container, text="+ Add Item", 
+                            command=lambda sf=scrollable_frame, ew=entry_widgets: self._add_simple_list_row(sf, ew))
+        add_button.grid(row=1, column=0, columnspan=2, sticky="ew")
+
+    def _create_dict_ui(self, parent, row_index, value, attr_name):
+        """Creates a UI for a dictionary where both keys and values are editable."""
+        main_container = Frame(parent, bd=1, relief=tk.SOLID)
+        main_container.grid(row=row_index, column=1, sticky="ew", padx=2, pady=2)
+        items_frame = Frame(main_container)
+        items_frame.pack(fill="x", expand=True, padx=2, pady=2)
+        sub_widgets = []
+        for key, val in value.items():
+            self._create_dict_row(items_frame, key, val, sub_widgets)
+        add_button = Button(main_container, text="+ Add", command=lambda f=items_frame, w=sub_widgets: self._add_dict_item(f, w))
+        add_button.pack(fill="x", expand=True, side="bottom")
+        self.attribute_widgets[attr_name] = sub_widgets
+
+    def _create_fixed_key_dict_ui(self, parent, row_index, value, attr_name):
+        """Creates a UI for a dictionary where keys are fixed labels."""
+        dict_frame = Frame(parent, bd=1, relief=tk.SOLID)
+        dict_frame.grid(row=row_index, column=1, sticky="ew", padx=2, pady=2)
+        dict_frame.grid_columnconfigure(1, weight=1)
+        sub_entries = {}
+        for j, (key, val) in enumerate(value.items()):
+            tk.Label(dict_frame, text=key).grid(row=j, column=0, sticky="w", padx=2, pady=2)
+            entry = Entry(dict_frame)
+            entry.insert(0, str(val))
+            entry.grid(row=j, column=1, sticky="ew", padx=2, pady=2)
+            sub_entries[key] = entry
+        self.attribute_widgets[attr_name] = sub_entries
 
     def save_entity_details(self):
         if not self.selected_entity: return
@@ -495,70 +524,78 @@ class DebugWindow(tk.Toplevel):
         for attr, collection in self.attribute_widgets.items():
             orig_val = getattr(self.selected_entity, attr, None)
             try:
-                if attr in ['memories', 'quotes']:
-                    text_content = collection.get('1.0', tk.END).strip()
-                    new_list = [line for line in text_content.split('\n') if line.strip()]
-                    setattr(self.selected_entity, attr, new_list)
+                if isinstance(collection, tk.Text):
+                    setattr(self.selected_entity, attr, collection.get('1.0', tk.END).strip())
 
-                elif attr == 'attitudes':
+                elif isinstance(collection, list) and collection and isinstance(collection[0], tuple): # Editable Dict
                     new_dict = {}
-                    if isinstance(collection, list):
-                        for (key_entry, val_entry) in collection:
-                            key, val = key_entry.get().strip(), val_entry.get().strip()
-                            if key: new_dict[key] = val
-                    setattr(self.selected_entity, attr, new_dict)
+                    for (key_entry, val_entry) in collection:
+                        key, val_str = key_entry.get().strip(), val_entry.get().strip()
+                        if key:
+                            new_dict[key] = val_str
+
+                    if attr == 'attitudes': 
+                         setattr(self.selected_entity, attr, [{k: v} for k, v in new_dict.items()])
+                    else:
+                         setattr(self.selected_entity, attr, new_dict)
 
                 elif isinstance(collection, list) and isinstance(orig_val, list):
-                    if collection and isinstance(collection[0], dict):
-                        new_list_of_dicts = []
-                        for item_widget_dict in collection:
-                            new_item_dict = {}
-                            for key, widget in item_widget_dict.items():
-                                val = widget.get() if isinstance(widget, (tk.BooleanVar, Entry)) else widget
-                                new_item_dict[key] = val
-                            
-                            template_dict = (orig_val[0] if orig_val else {}) or new_item_dict
-                            for key in new_item_dict:
-                                if key in template_dict:
-                                    orig_type = type(template_dict.get(key, ''))
-                                    try:
-                                        current_val = new_item_dict[key]
-                                        if orig_type is bool and not isinstance(current_val, bool):
-                                            new_item_dict[key] = str(current_val).lower() in ('true', '1', 'yes')
-                                        elif type(current_val) is not orig_type:
-                                            new_item_dict[key] = orig_type(current_val)
-                                    except (ValueError, TypeError): pass
-                            new_list_of_dicts.append(new_item_dict)
-                        setattr(self.selected_entity, attr, new_list_of_dicts)
-                    else:
+                    if not collection or isinstance(collection[0], Entry): # Simple List
                         new_list = []
-                        item_type = type(orig_val[0]) if orig_val else str
+                        item_type = type(orig_val[0]) if orig_val and orig_val[0] is not None else str
                         for entry_widget in collection:
-                            try:
-                                new_list.append(item_type(entry_widget.get()))
-                            except (ValueError, TypeError):
-                                new_list.append(entry_widget.get())
+                            try: new_list.append(item_type(entry_widget.get()))
+                            except (ValueError, TypeError): new_list.append(entry_widget.get())
                         setattr(self.selected_entity, attr, new_list)
+                    
+                    else:
+                        new_list_of_items = []
+                        item_type = type(orig_val[0]) if orig_val else dict
+                        
+                        for item_widget_dict in collection:
+                            new_item_dict = {key: widget.get() for key, widget in item_widget_dict.items()}
+                            
+                            template_item = orig_val[0] if orig_val else {}
+                            template_dict = vars(template_item) if not isinstance(template_item, dict) else template_item
+
+                            for key, current_val in new_item_dict.items():
+                                orig_type = type(template_dict.get(key, ''))
+                                try:
+                                    if orig_type is bool and not isinstance(current_val, bool):
+                                        new_item_dict[key] = str(current_val).lower() in ('true', '1', 'yes')
+                                    elif type(current_val) is not orig_type:
+                                        new_item_dict[key] = orig_type(str(current_val))
+                                except (ValueError, TypeError): pass
+                            
+                            if item_type is not dict:
+                                new_list_of_items.append(item_type(**new_item_dict))
+                            else:
+                                new_list_of_items.append(new_item_dict)
+                        setattr(self.selected_entity, attr, new_list_of_items)
 
                 elif isinstance(collection, dict) and isinstance(orig_val, dict):
                     new_dict = {}
                     for key, entry_widget in collection.items():
                         val_str = entry_widget.get()
                         orig_type = type(orig_val.get(key, ''))
-                        try:
-                            new_dict[key] = orig_type(val_str)
-                        except (ValueError, TypeError):
-                            new_dict[key] = val_str
+                        try: new_dict[key] = orig_type(val_str)
+                        except (ValueError, TypeError): new_dict[key] = val_str
                     setattr(self.selected_entity, attr, new_dict)
-                
+
+                elif isinstance(collection, tk.BooleanVar):
+                    setattr(self.selected_entity, attr, collection.get())
+
                 elif isinstance(collection, Entry):
                     val_str = collection.get()
-                    if isinstance(orig_val, bool):
-                        new_val = val_str.lower() in ('true', '1', 'yes')
-                    elif orig_val is None:
-                        new_val = val_str if val_str.lower() != 'none' else None
-                    else:
-                        new_val = type(orig_val)(val_str)
+                    new_val = val_str
+                    try:
+                        if isinstance(orig_val, bool):
+                            new_val = val_str.lower() in ('true', '1', 'yes')
+                        elif orig_val is None:
+                            new_val = val_str if val_str.lower() != 'none' else None
+                        elif orig_val is not None:
+                            new_val = type(orig_val)(val_str)
+                    except (ValueError, TypeError): pass
                     setattr(self.selected_entity, attr, new_val)
 
             except Exception as e:

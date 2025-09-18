@@ -63,7 +63,7 @@ def main():
                 }
             },
             {   "type": "function", "function": {
-                    "name": "narration", "description": "Narrates the action",
+                    "name": "dialogue", "description": "Character is primarily speaking",
                     "parameters": {"type": "object", "properties": {
                         "target": {"type": "string", "description": "The item or person being spoken to."}
                         },

@@ -1,23 +1,42 @@
-from collections import deque
+import collections
+from dataclasses import dataclass, field
+from typing import Dict, List, Any
 from d6_rules import D6_SKILLS_BY_ATTRIBUTE
 
+@dataclass
 class ActiveEffect:
     """Represents an ongoing spell or condition on a character."""
-    def __init__(self, name, duration_text, target):
-        self.name = name
-        self.duration_text = duration_text
-        self.target_name = target.name
-    
+    name: str
+    duration_text: str
+    target_name: str
+
     def __str__(self):
         return f"'{self.name}' on {self.target_name} (Duration: {self.duration_text})"
+    
+@dataclass
+class InventoryItem:
+    """Represents a single item in an actor's inventory."""
+    item: str
+    quantity: int
+    equipped: bool = False
 
+@dataclass
 class Object:
     """Represents a static object in the game world."""
-    def __init__(self, object_data, room_id, zone_id=None):
-        self.source_data = object_data
-        for key, value in object_data.items():
-            setattr(self, key, value)
-        self.location = {'room_id': room_id, 'zone': zone_id}
+    name: str
+    description: str
+    location: Dict[str, Any]
+    source_data: Dict[str, Any]
+    
+    is_interactive: bool = field(default=False)
+    max_hp: int = field(default=0)
+    cur_hp: int = field(default=0)
+
+    def __post_init__(self):
+        """Allows for additional setup after the dataclass __init__ runs."""
+        for key, value in self.source_data.items():
+            if not hasattr(self, key):
+                setattr(self, key, value)
 
 class Environment:
     """Manages the game world's rooms, objects, and exits."""
@@ -32,16 +51,43 @@ class Environment:
 
         for room in self.rooms.values():
             for obj_data in room.get('objects', []):
-                self.objects.append(Object(obj_data, room['room_id']))
+                initial_hp = obj_data.get('hp', 0)
+                new_obj = Object(
+                    name=obj_data.get('name', 'Unknown Object'),
+                    description=obj_data.get('description', ''),
+                    location={'room_id': room['room_id'], 'zone': None},
+                    source_data=obj_data,
+                    is_interactive=obj_data.get('is_interactive', False),
+                    max_hp=initial_hp,
+                    cur_hp=initial_hp
+                )
+                self.objects.append(new_obj)
             for zone_data in room.get('zones', []):
                 for obj_data in zone_data.get('objects', []):
-                    self.objects.append(Object(obj_data, room['room_id'], zone_data.get('zone')))
+                    initial_hp = obj_data.get('hp', 0)
+                    new_obj = Object(
+                        name=obj_data.get('name', 'Unknown Object'),
+                        description=obj_data.get('description', ''),
+                        location={'room_id': room['room_id'], 'zone': zone_data.get('zone')},
+                        source_data=obj_data,
+                        is_interactive=obj_data.get('is_interactive', False),
+                        max_hp=initial_hp,
+                        cur_hp=initial_hp
+                    )
+                    self.objects.append(new_obj)
 
         for player_data in players_data:
             sheet_path = player_data['sheet']
             char_sheet = load_character_sheet_func(sheet_path)
             if char_sheet:
-                player_actor = Actor(char_sheet, player_data['location'])
+                if char_sheet.get('memories') is None:
+                    char_sheet['memories'] = []
+                
+                player_actor = Actor(
+                    **char_sheet, 
+                    location=player_data['location'], 
+                    source_data=char_sheet
+                )
                 player_actor.is_player = True
                 self.players.append(player_actor)
             else:
@@ -51,7 +97,15 @@ class Environment:
             sheet_path = actor_data['sheet']
             char_sheet = load_character_sheet_func(sheet_path)
             if char_sheet:
-                self.actors.append(Actor(char_sheet, actor_data['location']))
+                if char_sheet.get('memories') is None:
+                    char_sheet['memories'] = []
+
+                new_actor = Actor(
+                    **char_sheet,
+                    location=actor_data['location'],
+                    source_data=char_sheet
+                )
+                self.actors.append(new_actor)
             else:
                 print(f"Warning: Could not load actor character sheet: {sheet_path}")
 
@@ -103,14 +157,39 @@ class Environment:
         all_spells = getattr(self, 'all_spells', {}) 
         return all_spells.get(spell_name.lower())
 
+@dataclass
 class Actor:
     """Represents an actor in the game."""
-    def __init__(self, character_sheet_data, location):
-        self.source_data = character_sheet_data
-        for key, value in character_sheet_data.items():
-            setattr(self, key, value)
-        self.location = location
-        self.is_player = False
+    name: str
+    max_hp: int
+    cur_hp: int
+    exp: int
+    attributes: Dict[str, int]
+    skills: Dict[str, int]
+    inventory: List[InventoryItem]
+    spells: List[str]
+    allies: str
+    attitudes: List[Dict[str, str]]
+    statuses: List[str]
+    personality: List[str]
+    languages: List[str]
+    qualities: Dict[str, Any]
+    memories: List[str]
+
+    location: Dict[str, Any] = field(default_factory=dict)
+    source_data: Dict[str, Any] = field(default_factory=dict)
+    is_player: bool = False
+    
+    description: str = ""
+    quotes: List[str] = field(default_factory=list)
+    
+    def __post_init__(self):
+        """
+        Performs post-initialization setup.
+        Converts inventory dictionaries into InventoryItem objects.
+        """
+        if self.inventory and isinstance(self.inventory[0], dict):
+            self.inventory = [InventoryItem(**data) for data in self.inventory]
 
     def get_attribute_or_skill_pips(self, trait_name):
         """Gets the total number of pips for a given attribute or skill."""
@@ -131,7 +210,7 @@ class Actor:
 class GameHistory:
     """Records the past few actions and dialogues in the game."""
     def __init__(self, max_entries=5):
-        self.history = deque(maxlen=max_entries)
+        self.history = collections.deque(maxlen=max_entries)
 
     def add_action(self, actor_name, action_description):
         self.history.append(f"{actor_name} - {action_description}")
@@ -175,19 +254,15 @@ class Party:
         status_lines = [f"{member.name} (HP: {member.cur_hp}/{member.max_hp})" for member in self.members]
         return "\n".join(status_lines)
     
+@dataclass
 class GameState:
-    """
-    A container for all the core components of the game world state.
-    This makes it easier to pass the game state around without having
-    functions with dozens of arguments.
-    """
-    def __init__(self, environment: Environment, party: Party, game_history: GameHistory):
-        self.environment = environment
-        self.party = party
-        self.game_history = game_history
-        self.players = environment.players
-        self.actors = environment.actors
-        self.llm_log = []
+    """A container for all the core components of the game world state."""
+    environment: 'Environment'
+    party: 'Party'
+    game_history: 'GameHistory'
+    players: List['Actor']
+    actors: List['Actor']
+    llm_log: list = field(default_factory=list)
 
     def find_actor_by_name(self, name: str):
         """Utility function to find any actor (player or NPC) by name."""
@@ -201,7 +276,6 @@ class GameState:
         return None
 
 import actions
-from classes import GameState
 
 class ActionHandler:
     """
@@ -231,8 +305,8 @@ class ActionHandler:
         arguments['game_state'] = self.game_state
         arguments['actor'] = actor
         
-        if function_name == "narration":
-            return f"\n{actor.name} used narration"
+        if function_name == "dialogue":
+            return f"\n{actor.name} used dialogue"
         if function_name not in self.function_map:
             error_msg = f"\n Error: The AI tried to call an unknown function '{function_name}'."
             self.game_state.game_history.add_action(actor.name, error_msg)

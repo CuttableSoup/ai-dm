@@ -63,7 +63,13 @@ class GameManager:
         for player in environment.players:
             party.add_member(player)
 
-        self.game_state = GameState(environment, party, game_history)
+        self.game_state = GameState(
+            environment=environment,
+            party=party,
+            game_history=game_history,
+            players=environment.players,
+            actors=environment.actors
+        )
 
 
     def save_game(self, filepath):
