@@ -12,7 +12,7 @@ def main():
         "model": "local-model/gemma-3-12b",
         "tools": [
             {   "type": "function", "function": {
-                    "name": "execute_skill_check", "description": "Use a non-magical skill on an object or another character. Examples: 'melee goblin', 'observation chest', 'charisma guard'.",
+                    "name": "execute_skill_check", "description": "Use a non-magical skill on an object or another character.",
                     "parameters": {"type": "object", "properties": {
                         "skill": {"type": "string", "description": "The name of the skill being used."},
                         "target": {"type": "string", "description": "The target of the skill (an object or character name)."}
@@ -53,12 +53,21 @@ def main():
                 }
             },
             {   "type": "function", "function": {
-                    "name": "cast_spell", "description": "Casts a magical spell on a target. Examples: 'cast Fireball on Goblin', 'cast Armor on myself'.",
+                    "name": "cast_spell", "description": "Casts a magical spell on a target.",
                     "parameters": {"type": "object", "properties": {
                         "spell_name": {"type": "string", "description": "The name of the spell being cast."},
                         "target_name": {"type": "string", "description": "The name of the character or creature being targeted."}
                         },
                         "required": ["spell_name", "target_name"]
+                    }
+                }
+            },
+            {   "type": "function", "function": {
+                    "name": "narration", "description": "Narrates the action",
+                    "parameters": {"type": "object", "properties": {
+                        "target": {"type": "string", "description": "The item or person being spoken to."}
+                        },
+                        "required": ["target"]
                     }
                 }
             }

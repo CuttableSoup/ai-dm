@@ -228,15 +228,17 @@ class ActionHandler:
         Returns:
             A string summarizing the mechanical result of the action.
         """
+        arguments['game_state'] = self.game_state
+        arguments['actor'] = actor
+        
+        if function_name == "narration":
+            return f"\n{actor.name} used narration"
         if function_name not in self.function_map:
-            error_msg = f"Error: The AI tried to call an unknown function '{function_name}'."
+            error_msg = f"\n Error: The AI tried to call an unknown function '{function_name}'."
             self.game_state.game_history.add_action(actor.name, error_msg)
             return error_msg
 
         action_function = self.function_map[function_name]
-
-        arguments['game_state'] = self.game_state
-        arguments['actor'] = actor
         
         if function_name == "cast_spell":
             arguments['llm_config'] = self.llm_config
