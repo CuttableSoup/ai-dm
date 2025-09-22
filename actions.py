@@ -1,12 +1,14 @@
 from d6_rules import roll_d6_check, COMBAT_SKILLS, OPPOSED_SKILLS, roll_d6_dice
 from llm_spell_calls import resolve_spell_effect
-from classes import GameState
+from classes import GameState, InventoryItem
 
 def get_equipped_weapon(actor, skill_name, game_state: GameState):
     """Finds the equipped weapon for a given combat skill."""
     for item_in_inventory in getattr(actor, 'inventory', []):
-        if item_in_inventory.get('equipped'):
-            item_details = game_state.environment.get_item_details(item_in_inventory['item'])
+        # FIX: Use attribute access (item.equipped) instead of dictionary access (item.get('equipped'))
+        if item_in_inventory.equipped:
+            # FIX: Use attribute access (item.item) instead of dictionary access (item['item'])
+            item_details = game_state.environment.get_item_details(item_in_inventory.item)
             if item_details and item_details.get('skill', '').lower() == skill_name.lower():
                 return item_details
     return None
@@ -184,7 +186,8 @@ def manage_item(actor, action: str, item_name: str, game_state: GameState, quant
         case 'equip':
             item_to_equip = None
             for item in getattr(actor, 'inventory', []):
-                if item['item'].lower() == item_name_lower:
+                # FIX: Use attribute access
+                if item.item.lower() == item_name_lower:
                     item_to_equip = item
                     break
             if not item_to_equip:
@@ -193,18 +196,22 @@ def manage_item(actor, action: str, item_name: str, game_state: GameState, quant
             if not item_details or 'type' not in item_details:
                 return f"Cannot determine the type of {item_name} to equip it correctly."
             item_type = item_details['type']
+            # Unequip any other item of the same type
             for item in getattr(actor, 'inventory', []):
-                if item.get('equipped'):
-                    other_item_details = game_state.environment.get_item_details(item['item'])
+                # FIX: Use attribute access
+                if item.equipped:
+                    other_item_details = game_state.environment.get_item_details(item.item)
                     if other_item_details and other_item_details.get('type') == item_type:
-                        item['equipped'] = False
-            item_to_equip['equipped'] = True
+                        item.equipped = False
+            # Equip the new item
+            item_to_equip.equipped = True
             return f"{actor.name} equips the {item_name}."
 
         case 'unequip':
             for item in getattr(actor, 'inventory', []):
-                if item['item'].lower() == item_name_lower and item.get('equipped'):
-                    item['equipped'] = False
+                # FIX: Use attribute access
+                if item.item.lower() == item_name_lower and item.equipped:
+                    item.equipped = False
                     return f"{actor.name} unequips the {item_name}."
             return f"{actor.name} does not have a {item_name} equipped."
 
@@ -221,7 +228,8 @@ def manage_item(actor, action: str, item_name: str, game_state: GameState, quant
             item_to_move = None
             inventory = getattr(actor, 'inventory', [])
             for i, item in enumerate(inventory):
-                if item['item'].lower() == item_name_lower:
+                 # FIX: Use attribute access
+                if item.item.lower() == item_name_lower:
                     item_to_move = inventory.pop(i)
                     break
             if not item_to_move:
@@ -238,16 +246,20 @@ def manage_item(actor, action: str, item_name: str, game_state: GameState, quant
             if not hasattr(actor, 'inventory'):
                 actor.inventory = []
             for _ in range(quantity):
-                actor.inventory.append({'item': item_details['name'], 'equipped': False})
+                # FIX: Append an actual InventoryItem object, not a dictionary
+                new_item = InventoryItem(item=item_details['name'], equipped=False, quantity=1)
+                actor.inventory.append(new_item)
             return f"Created {quantity} {item_name} and added it to {actor.name}'s inventory."
 
         case 'destroy':
             inventory = getattr(actor, 'inventory', [])
             items_removed = 0
+            # Iterate backwards when removing items from a list
             for i in range(len(inventory) - 1, -1, -1):
                 if items_removed >= quantity:
                     break
-                if inventory[i]['item'].lower() == item_name_lower:
+                # FIX: Use attribute access
+                if inventory[i].item.lower() == item_name_lower:
                     inventory.pop(i)
                     items_removed += 1
             if items_removed > 0:
