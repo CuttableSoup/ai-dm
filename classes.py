@@ -1,7 +1,50 @@
 import collections
 from dataclasses import dataclass, field
 from typing import Dict, List, Any
-from d6_rules import D6_SKILLS_BY_ATTRIBUTE
+from d6_rules import roll_d6_check, D6_SKILLS_BY_ATTRIBUTE
+
+class Skill:
+    """Represents a single, rollable skill belonging to an actor."""
+    def __init__(self, name: str, pips: int, actor: 'Actor'):
+        self.name = name
+        self.pips = pips
+        self._actor = actor # A reference to the actor who owns the skill
+
+    @property
+    def total_pips(self) -> int:
+        """Calculates the total pips by adding the base attribute."""
+        for attr, skill_list in D6_SKILLS_BY_ATTRIBUTE.items():
+            if self.name in skill_list:
+                # Adds skill pips to the governing attribute's pips
+                return self.pips + self._actor.attributes.get(attr, 0)
+        return self.pips # Return raw pips if no attribute is found
+
+    def roll(self, dc: int = 0) -> tuple[int, bool]:
+        """Performs a d6 check for this skill."""
+        return roll_d6_check(self.total_pips, dc)
+
+    def __repr__(self):
+        return f"Skill(name='{self.name}', pips={self.pips}, total={self.total_pips})"
+
+class SkillHandler:
+    """Provides attribute-style access (e.g., .melee) to an actor's skills."""
+    def __init__(self, actor: 'Actor'):
+        self._actor = actor
+        self._skills = {
+            name: Skill(name, pips, actor)
+            for name, pips in actor.source_data.get('skills', {}).items()
+        }
+
+    def __getattr__(self, name: str) -> Skill:
+        """Allows you to access skills like 'actor.skills.melee'."""
+        if name in self._skills:
+            return self._skills[name]
+        # Return a default Skill object with 0 pips if the actor doesn't have it.
+        # This prevents errors if you check for a skill the actor doesn't possess.
+        return Skill(name, 0, self._actor)
+
+    def __repr__(self):
+        return f"SkillHandler({list(self._skills.keys())})"
 
 @dataclass
 class ActiveEffect:
@@ -160,7 +203,8 @@ class Actor:
     cur_hp: int
     exp: int
     attributes: Dict[str, int]
-    skills: Dict[str, int]
+    # The 'skills' dict is now populated by __post_init__
+    skills: SkillHandler = field(init=False, repr=False)
     inventory: List[InventoryItem]
     spells: List[str]
     allies: str
@@ -172,35 +216,22 @@ class Actor:
     memories: List[str]
 
     location: Dict[str, Any] = field(default_factory=dict)
-    source_data: Dict[str, Any] = field(default_factory=dict)
+    source_data: Dict[str, Any] = field(default_factory=dict) # Raw data from YAML
     is_player: bool = False
+    
+    equipped_weapon: 'Weapon' = field(default=None, init=False, repr=False)
     
     description: str = ""
     quotes: List[str] = field(default_factory=list)
     
     def __post_init__(self):
-        """
-        Performs post-initialization setup.
-        Converts inventory dictionaries into InventoryItem objects.
-        """
+        """Performs post-initialization setup."""
+        # 1. Convert inventory dictionaries into InventoryItem objects
         if self.inventory and isinstance(self.inventory[0], dict):
             self.inventory = [InventoryItem(**data) for data in self.inventory]
 
-    def get_attribute_or_skill_pips(self, trait_name):
-        """Gets the total number of pips for a given attribute or skill."""
-        trait_name = trait_name.lower()
-        
-        if trait_name in self.attributes:
-            return self.attributes[trait_name]
-
-        if trait_name in self.skills:
-            skill_pips = self.skills[trait_name]
-            for attr, skill_list in D6_SKILLS_BY_ATTRIBUTE.items():
-                if trait_name in skill_list:
-                    return skill_pips + (self.attributes.get(attr, 0))
-            return skill_pips
-
-        return 0
+        # 2. Initialize the SkillHandler, which creates all the Skill objects
+        self.skills = SkillHandler(self)
 
 class GameHistory:
     """Records the past few actions and dialogues in the game."""

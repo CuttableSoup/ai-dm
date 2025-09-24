@@ -33,36 +33,33 @@ def execute_skill_check(actor, skill: str, target: str, game_state: GameState):
             target_entity = target_actor or target_object
             if not target_entity:
                 return f"Cannot find '{target}' to attack."
-            if target_entity == actor:
-                return f"{actor.name} can't attack themself."
 
-            actor_pips = actor.get_attribute_or_skill_pips(skill_lower)
-            actor_roll, _ = roll_d6_check(actor_pips, 0)
+            if not actor.equipped_weapon or actor.equipped_weapon.skill.lower() != skill_lower:
+                return f"{actor.name} tries to attack but has no appropriate weapon equipped!"
+            
+            # Simply roll the skill!
+            actor_roll, _ = actor.skills.melee.roll()
 
             highest_opposition_roll = 0
             if target_actor:
-                opposing_skills = OPPOSED_SKILLS.get(skill_lower, ['dodge'])
-                for opposing_skill in opposing_skills:
-                    target_pips = target_actor.get_attribute_or_skill_pips(opposing_skill)
-                    target_roll, _ = roll_d6_check(target_pips, 0)
-                    if target_roll > highest_opposition_roll:
-                        highest_opposition_roll = target_roll
-            
+                # The opposing roll is just as simple
+                target_dodge_roll, _ = target_actor.skills.dodge.roll()
+                target_melee_roll, _ = target_actor.skills.melee.roll() # For parrying
+                highest_opposition_roll = max(target_dodge_roll, target_melee_roll)
+
             if actor_roll > highest_opposition_roll:
-                equipped_weapon = get_equipped_weapon(actor, skill_lower, game_state)
-                if not equipped_weapon:
-                    return f"{actor.name} tries to attack but has no appropriate weapon equipped!"
-                
-                base_damage = equipped_weapon.get('value', 3)
+                # Access weapon data directly from the actor
+                base_damage = actor.equipped_weapon.value
                 damage_dealt = base_damage + (actor_roll - highest_opposition_roll)
+                
                 target_dr = getattr(target_entity, 'dr', 0)
                 final_damage = max(0, damage_dealt - target_dr)
                 
                 damage_message = ""
-                if hasattr(target_entity, 'hp'):
-                    current_hp = getattr(target_entity, 'hp')
+                if hasattr(target_entity, 'cur_hp'):
+                    current_hp = getattr(target_entity, 'cur_hp')
                     new_hp = current_hp - final_damage
-                    setattr(target_entity, 'hp', new_hp) 
+                    setattr(target_entity, 'cur_hp', new_hp) 
                     
                     if new_hp <= 0:
                         damage_message = f"{target_entity.name} is destroyed!"
@@ -72,39 +69,15 @@ def execute_skill_check(actor, skill: str, target: str, game_state: GameState):
                     damage_message = f"{target_entity.name} seems unaffected."
 
                 dr_message = f" (reduced by {target_dr} from armor)" if target_dr > 0 else ""
-                return (f"{actor.name}'s {skill} attack with {equipped_weapon['name']} hits {target_entity.name}! "
+                return (f"{actor.name}'s {skill} attack with {actor.equipped_weapon.name} hits {target_entity.name}! "
                         f"It deals {final_damage} damage{dr_message}. {damage_message}")
             else:
                 return f"{actor.name}'s {skill} attack misses {target_entity.name}."
         
         case "observation":
-            if target_object:
-                dc = getattr(target_object, 'observation_dc', 10)
-                actor_pips = actor.get_attribute_or_skill_pips('observation')
-                _, success = roll_d6_check(actor_pips, dc)
-                if success:
-                    return f"{actor.name} observes {target_object.name} closely: {target_object.description}"
-                else:
-                    return f"{actor.name} doesn't notice anything unusual about {target_object.name}."
-            elif target_actor:
-                return f"{actor.name} is observing {target_actor.name}."
-            else:
-                return f"{actor.name} observes the area, but doesn't focus on anything in particular."
-        
+            return
         case "charisma":
-            if not target_actor:
-                return f"Cannot find '{target}' to use {skill} on."
-            
-            actor_pips = actor.get_attribute_or_skill_pips(skill_lower)
-            target_pips = target_actor.get_attribute_or_skill_pips('willpower')
-            actor_roll, _ = roll_d6_check(actor_pips, 0)
-            target_roll, _ = roll_d6_check(target_pips, 0)
-
-            if actor_roll > target_roll:
-                return f"{actor.name} successfully uses {skill} on {target_actor.name}."
-            else:
-                return f"{target_actor.name} resists {actor.name}'s attempt at {skill}."
-
+            return
         case "athletics":
             return
         case "throwing":
