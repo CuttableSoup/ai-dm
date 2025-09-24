@@ -1,5 +1,4 @@
 from d6_rules import roll_d6_check, COMBAT_SKILLS, OPPOSED_SKILLS, roll_d6_dice
-from llm_spell_calls import resolve_spell_effect
 from classes import GameState, InventoryItem
 
 def get_equipped_weapon(actor, skill_name, game_state: GameState):
@@ -322,33 +321,3 @@ def move_party(actor, destination_zone: str, game_state: GameState):
     new_room, new_zone = environment.get_current_room_data(new_location)
     description = new_zone.get('description', 'You arrive in the new area.')
     return f"The party moves to the {destination_zone}. {description}"
-
-def cast_spell(actor, spell_name: str, target_name: str, game_state: GameState, llm_config: dict):
-    """Handles the entire process of casting a spell: skill check, then effect resolution."""
-    spell_details = game_state.environment.get_spell_details(spell_name)
-    if not spell_details:
-        return f"{actor.name} does not know the spell '{spell_name}'."
-
-    target = game_state.find_actor_by_name(target_name)
-    if not target:
-        return f"Cannot find a target named '{target_name}'."
-
-    caster_skill_pips = actor.get_attribute_or_skill_pips(spell_details['skill'])
-    difficulty = int(spell_details['spell difficulty'])
-    
-    if caster_skill_pips < difficulty:
-        return f"{actor.name} attempts to cast {spell_name}, but the magic fizzles and dissipates with a faint pop."
-
-    game_state.game_history.add_action(actor.name, f"successfully casts {spell_name} on {target.name}.")
-    
-    mechanical_result = resolve_spell_effect(
-        caster=actor,
-        spell=spell_details,
-        target=target,
-        party=game_state.party,
-        players=game_state.players,
-        actors=game_state.actors,
-        llm_config=llm_config
-    )
-    
-    return mechanical_result
