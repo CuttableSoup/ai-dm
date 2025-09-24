@@ -151,11 +151,6 @@ class Environment:
 
     def get_item_details(self, item_name):
         return self.all_items.get(item_name.lower())
-    
-    def get_spell_details(self, spell_name):
-        """Finds spell details from the game's loaded spells data."""
-        all_spells = getattr(self, 'all_spells', {}) 
-        return all_spells.get(spell_name.lower())
 
 @dataclass
 class Actor:
@@ -291,8 +286,7 @@ class ActionHandler:
             "execute_skill_check": actions.execute_skill_check,
             "manage_item": actions.manage_item,
             "manage_party_member": actions.manage_party_member,
-            "move_party": actions.move_party,
-            "cast_spell": actions.cast_spell,
+            "move_party": actions.move_party
         }
 
     def execute_action(self, actor, function_name: str, arguments: dict):
@@ -313,9 +307,6 @@ class ActionHandler:
             return error_msg
 
         action_function = self.function_map[function_name]
-        
-        if function_name == "cast_spell":
-            arguments['llm_config'] = self.llm_config
 
         try:
             mechanical_result = action_function(**arguments)
