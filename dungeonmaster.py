@@ -50,16 +50,6 @@ def main():
             }
         },
         {   "type": "function", "function": {
-                "name": "cast_spell", "description": "Casts a magical spell on a target.",
-                "parameters": {"type": "object", "properties": {
-                    "spell_name": {"type": "string", "description": "The name of the spell being cast."},
-                    "target_name": {"type": "string", "description": "The name of the character or creature being targeted."}
-                    },
-                    "required": ["spell_name", "target_name"]
-                }
-            }
-        },
-        {   "type": "function", "function": {
                 "name": "dialogue", "description": "Character is primarily speaking",
                 "parameters": {"type": "object", "properties": {
                     "target": {"type": "string", "description": "The item or person being spoken to."}
