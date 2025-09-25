@@ -67,7 +67,7 @@ def main():
             "headers": {
                 "Authorization": f"Bearer {config.OPENROUTER_API_KEY}",
             },
-            "model": "deepseek/deepseek-chat-v3.1:free", # Example online model
+            "model": "x-ai/grok-4-fast:free", # Example online model
             "tools": tools
         }
     else:

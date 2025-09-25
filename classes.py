@@ -43,6 +43,12 @@ class SkillHandler:
         # This prevents errors if you check for a skill the actor doesn't possess.
         return Skill(name, 0, self._actor)
 
+    # --- NEW METHOD START ---
+    def keys(self):
+        """Returns the names of the skills the actor actually possesses."""
+        return self._skills.keys()
+    # --- NEW METHOD END ---
+
     def __repr__(self):
         return f"SkillHandler({list(self._skills.keys())})"
 
@@ -126,10 +132,13 @@ class Environment:
                 if char_sheet.get('memories') is None:
                     char_sheet['memories'] = []
                 
+                constructor_args = char_sheet.copy()
+                constructor_args.pop('skills', None)
+                
                 player_actor = Actor(
-                    **char_sheet, 
+                    **constructor_args, 
                     location=player_data['location'], 
-                    source_data=char_sheet
+                    source_data=char_sheet 
                 )
                 player_actor.is_player = True
                 self.players.append(player_actor)
@@ -143,8 +152,11 @@ class Environment:
                 if char_sheet.get('memories') is None:
                     char_sheet['memories'] = []
 
+                constructor_args = char_sheet.copy()
+                constructor_args.pop('skills', None)
+
                 new_actor = Actor(
-                    **char_sheet,
+                    **constructor_args,
                     location=actor_data['location'],
                     source_data=char_sheet
                 )
@@ -203,7 +215,6 @@ class Actor:
     cur_hp: int
     exp: int
     attributes: Dict[str, int]
-    # The 'skills' dict is now populated by __post_init__
     skills: SkillHandler = field(init=False, repr=False)
     inventory: List[InventoryItem]
     spells: List[str]
@@ -216,7 +227,7 @@ class Actor:
     memories: List[str]
 
     location: Dict[str, Any] = field(default_factory=dict)
-    source_data: Dict[str, Any] = field(default_factory=dict) # Raw data from YAML
+    source_data: Dict[str, Any] = field(default_factory=dict)
     is_player: bool = False
     
     equipped_weapon: 'Weapon' = field(default=None, init=False, repr=False)
@@ -226,12 +237,27 @@ class Actor:
     
     def __post_init__(self):
         """Performs post-initialization setup."""
-        # 1. Convert inventory dictionaries into InventoryItem objects
         if self.inventory and isinstance(self.inventory[0], dict):
             self.inventory = [InventoryItem(**data) for data in self.inventory]
 
-        # 2. Initialize the SkillHandler, which creates all the Skill objects
         self.skills = SkillHandler(self)
+        
+    def get_attribute_or_skill_pips(self, name: str) -> int:
+        """
+        Gets the total pips for a given attribute or skill name.
+        It checks for an attribute first, then a skill.
+        """
+        name_lower = name.lower()
+
+        # 1. Check if the name matches an attribute.
+        if name_lower in self.attributes:
+            return self.attributes.get(name_lower, 0)
+        
+        # 2. If not an attribute, get it from the SkillHandler.
+        # This will correctly calculate total pips even for skills the actor
+        # doesn't have (it defaults to just the base attribute pips).
+        skill_obj = getattr(self.skills, name_lower)
+        return skill_obj.total_pips
 
 class GameHistory:
     """Records the past few actions and dialogues in the game."""
